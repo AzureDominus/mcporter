@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import { generateCli } from "./generate-cli.js";
 import { createRuntime } from "./runtime.js";
 
 type FlagMap = Partial<Record<string, string>>;
@@ -18,6 +19,11 @@ async function main(): Promise<void> {
 	if (!command) {
 		printHelp();
 		process.exit(1);
+	}
+
+	if (command === "generate-cli") {
+		await handleGenerateCli(argv, globalFlags);
+		return;
 	}
 
 	const runtime = await createRuntime({
@@ -59,6 +65,84 @@ function extractFlags(args: string[], keys: string[]): FlagMap {
 	return flags;
 }
 
+interface GenerateFlags {
+	server: string;
+	output?: string;
+	bundle?: boolean | string;
+	runtime: "node" | "bun";
+	timeout: number;
+}
+
+function parseGenerateFlags(args: string[]): GenerateFlags {
+	let server: string | undefined;
+	let output: string | undefined;
+	let bundle: boolean | string | undefined;
+	let runtime: "node" | "bun" = "node";
+	let timeout = 30_000;
+
+	let index = 0;
+	while (index < args.length) {
+		const token = args[index];
+		if (!token) {
+			index += 1;
+			continue;
+		}
+		if (token === "--server") {
+			server = expectValue(token, args[index + 1]);
+			args.splice(index, 2);
+			continue;
+		}
+		if (token === "--output") {
+			output = expectValue(token, args[index + 1]);
+			args.splice(index, 2);
+			continue;
+		}
+		if (token === "--runtime") {
+			const value = expectValue(token, args[index + 1]);
+			if (value !== "node" && value !== "bun") {
+				throw new Error("--runtime must be 'node' or 'bun'.");
+			}
+			runtime = value;
+			args.splice(index, 2);
+			continue;
+		}
+		if (token === "--timeout") {
+			const value = Number.parseInt(expectValue(token, args[index + 1]), 10);
+			if (!Number.isFinite(value) || value <= 0) {
+				throw new Error("--timeout must be a positive integer.");
+			}
+			timeout = value;
+			args.splice(index, 2);
+			continue;
+		}
+		if (token === "--bundle") {
+			const next = args[index + 1];
+			if (!next || next.startsWith("--")) {
+				bundle = true;
+				args.splice(index, 1);
+			} else {
+				bundle = next;
+				args.splice(index, 2);
+			}
+			continue;
+		}
+		throw new Error(`Unknown flag '${token}' for generate-cli.`);
+	}
+
+	if (!server) {
+		throw new Error("--server flag is required for generate-cli.");
+	}
+
+	return { server, output, bundle, runtime, timeout };
+}
+
+function expectValue(flag: string, value: string | undefined): string {
+	if (value === undefined) {
+		throw new Error(`Flag '${flag}' requires a value.`);
+	}
+	return value;
+}
+
 const LIST_TIMEOUT_MS = Number.parseInt(
 	process.env.MCP_LIST_TIMEOUT ?? "60000",
 	10,
@@ -74,6 +158,26 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 			setTimeout(() => reject(new Error("Timeout")), timeoutMs);
 		}),
 	]) as Promise<T>;
+}
+
+async function handleGenerateCli(
+	args: string[],
+	globalFlags: FlagMap,
+): Promise<void> {
+	const parsed = parseGenerateFlags(args);
+	const { outputPath, bundlePath } = await generateCli({
+		serverRef: parsed.server,
+		configPath: globalFlags["--config"],
+		rootDir: globalFlags["--root"],
+		outputPath: parsed.output,
+		runtime: parsed.runtime,
+		bundle: parsed.bundle,
+		timeoutMs: parsed.timeout,
+	});
+	console.log(`Generated CLI at ${outputPath}`);
+	if (bundlePath) {
+		console.log(`Bundled executable created at ${bundlePath}`);
+	}
 }
 
 // handleList prints configured servers and optional tool metadata.
@@ -355,6 +459,7 @@ Commands:
   list [name] [--schema]             List configured MCP servers (and tools for a server)
   call [selector] [flags]            Call a tool (selector like server.tool)
     --tail-log                       Tail log output when the tool returns a log file path
+  generate-cli --server <ref>        Generate a standalone CLI for a server (supports --output, --bundle)
 
 Global flags:
   --config <path>                    Path to mcp-runtime.json (defaults to ./config/mcp-runtime.json)

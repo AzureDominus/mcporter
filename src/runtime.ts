@@ -15,7 +15,7 @@ import { resolveEnvPlaceholders, withEnvOverrides } from "./env.js";
 import { createOAuthSession, type OAuthSession } from "./oauth.js";
 
 const PACKAGE_NAME = "mcp-runtime";
-const CLIENT_VERSION = "0.0.1";
+const CLIENT_VERSION = "0.2.0";
 
 export interface RuntimeOptions {
 	readonly configPath?: string;

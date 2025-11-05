@@ -1,11 +1,17 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { ServerDefinition } from "../src/config";
 import type { CallResult } from "../src/index.js";
 import type { Runtime, ServerToolInfo } from "../src/runtime";
+import { writeSchemaCache } from "../src/schema-cache";
 import { createServerProxy } from "../src/server-proxy";
 
 function createMockRuntime(
 	toolSchemas: Record<string, unknown> = {},
 	listToolsImpl?: () => Promise<ServerToolInfo[]>,
+	definitionOverrides: Partial<ServerDefinition> = {},
 ) {
 	const listTools = listToolsImpl
 		? vi.fn(listToolsImpl)
@@ -16,9 +22,25 @@ function createMockRuntime(
 					inputSchema: schema,
 				})),
 			);
+	const definition: ServerDefinition = {
+		name: definitionOverrides.name ?? "mock",
+		description: definitionOverrides.description,
+		command: definitionOverrides.command ?? {
+			kind: "stdio",
+			command: "mock",
+			args: [],
+			cwd: process.cwd(),
+		},
+		env: definitionOverrides.env,
+		auth: definitionOverrides.auth,
+		tokenCacheDir: definitionOverrides.tokenCacheDir,
+		clientName: definitionOverrides.clientName,
+	};
+
 	return {
 		callTool: vi.fn(async (_, __, options) => options),
 		listTools,
+		getDefinition: vi.fn(() => definition),
 	};
 }
 
@@ -94,6 +116,133 @@ describe("createServerProxy", () => {
 			tailLog: true,
 		});
 		expect(result.raw).toEqual({ args: { value: 1 }, tailLog: true });
+	});
+
+	it("hydrates schemas from disk cache without querying the server", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "mcp-runtime-schema-cache-"),
+		);
+		try {
+			const definition: ServerDefinition = {
+				name: "cached",
+				description: "",
+				command: {
+					kind: "stdio",
+					command: "mock",
+					args: [],
+					cwd: process.cwd(),
+				},
+				tokenCacheDir: tmpDir,
+			};
+			await writeSchemaCache(definition, {
+				updatedAt: new Date().toISOString(),
+				tools: {
+					"some-tool": {
+						type: "object",
+						properties: { foo: { type: "string" } },
+						required: ["foo"],
+					},
+				},
+			});
+
+			const runtime = createMockRuntime({}, undefined, definition);
+
+			const proxy = createServerProxy(
+				runtime as unknown as Runtime,
+				"cached",
+			) as Record<string, unknown>;
+
+			const fn = proxy.someTool as (args: unknown) => Promise<CallResult>;
+			const result = await fn({ foo: "bar" });
+
+			expect(result.raw).toEqual({ args: { foo: "bar" } });
+			expect(runtime.listTools).toHaveBeenCalled();
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("persists schemas to disk after fetching", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "mcp-runtime-schema-write-"),
+		);
+		try {
+			const runtime = createMockRuntime(
+				{
+					"some-tool": {
+						type: "object",
+						properties: { foo: { type: "string" } },
+						required: ["foo"],
+					},
+				},
+				undefined,
+				{
+					name: "persist",
+					tokenCacheDir: tmpDir,
+				},
+			);
+			const proxy = createServerProxy(
+				runtime as unknown as Runtime,
+				"persist",
+			) as Record<string, unknown>;
+
+			const fn = proxy.someTool as (args: unknown) => Promise<CallResult>;
+			await fn({ foo: "bar" });
+
+			const snapshotPath = path.join(tmpDir, "schema.json");
+			const snapshotRaw = await fs.readFile(snapshotPath, "utf8");
+			const snapshot = JSON.parse(snapshotRaw) as {
+				tools: Record<string, unknown>;
+			};
+			expect(Object.keys(snapshot.tools)).toContain("some-tool");
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("uses provided initial schemas without hitting listTools", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "mcp-runtime-schema-initial-"),
+		);
+		try {
+			const runtime = createMockRuntime(
+				{},
+				async () => {
+					throw new Error("listTools should not run when initial schemas set");
+				},
+				{
+					name: "initial",
+					tokenCacheDir: tmpDir,
+				},
+			);
+
+			const initial = {
+				"some-tool": {
+					type: "object",
+					properties: { foo: { type: "string" } },
+					required: ["foo"],
+				},
+			};
+
+			const proxy = createServerProxy(
+				runtime as unknown as Runtime,
+				"initial",
+				{ initialSchemas: initial },
+			) as Record<string, unknown>;
+
+			const fn = proxy.someTool as (args: unknown) => Promise<CallResult>;
+			await fn({ foo: "bar" });
+
+			const snapshotPath = path.join(tmpDir, "schema.json");
+			const snapshotRaw = await fs.readFile(snapshotPath, "utf8");
+			const snapshot = JSON.parse(snapshotRaw) as {
+				tools: Record<string, unknown>;
+			};
+			expect(Object.keys(snapshot.tools)).toContain("some-tool");
+			expect(runtime.listTools).not.toHaveBeenCalled();
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
 	});
 
 	it("applies schema defaults and validates required arguments", async () => {

@@ -1,5 +1,4 @@
 node_modules
-pnpm-lock.yaml
 .DS_Store
 dist
 
@@ -11,3 +10,10 @@ yarn-error.log*
 # Env
 .env
 
+# TypeScript build artifacts
+*.tsbuildinfo
+*.tsbuildinfo.*
+coverage
+build
+out
+tmp

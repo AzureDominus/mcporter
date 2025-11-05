@@ -1,0 +1,179 @@
+import fs from "node:fs/promises";
+import { createServer } from "node:http";
+import path from "node:path";
+import {
+	McpServer,
+	ResourceTemplate,
+} from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express from "express";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { generateCli } from "../src/generate-cli.js";
+
+let baseUrl: URL;
+const tmpDir = path.join(process.cwd(), "tmp", "mcp-runtime-cli-tests");
+
+beforeAll(async () => {
+	await fs.rm(tmpDir, { recursive: true, force: true });
+	await fs.mkdir(tmpDir, { recursive: true });
+	const app = express();
+	app.use(express.json());
+
+	const server = new McpServer({ name: "integration", version: "1.0.0" });
+	server.registerTool(
+		"add",
+		{
+			title: "Add",
+			description: "Add two numbers",
+			inputSchema: { a: z.number(), b: z.number() },
+			outputSchema: { result: z.number() },
+		},
+		async ({ a, b }) => {
+			const result = { result: Number(a) + Number(b) };
+			return {
+				content: [{ type: "text", text: JSON.stringify(result) }],
+				structuredContent: result,
+			};
+		},
+	);
+	server.registerResource(
+		"greeting",
+		new ResourceTemplate("greeting://{name}", { list: undefined }),
+		{ title: "Greeting", description: "Simple greeting" },
+		async (uri, { name }) => ({
+			contents: [
+				{
+					uri: uri.href,
+					text: `Hello, ${typeof name === "string" ? name : "friend"}!`,
+				},
+			],
+		}),
+	);
+
+	app.post("/mcp", async (req, res) => {
+		const transport = new StreamableHTTPServerTransport({
+			sessionIdGenerator: undefined,
+			enableJsonResponse: true,
+		});
+		res.on("close", () => {
+			transport.close().catch(() => {});
+		});
+		await server.connect(transport);
+		await transport.handleRequest(req, res, req.body);
+	});
+
+	const httpServer = createServer(app);
+	await new Promise<void>((resolve) =>
+		httpServer.listen(0, "127.0.0.1", resolve),
+	);
+	const address = httpServer.address();
+	if (!address || typeof address === "string") {
+		throw new Error("Failed to obtain test server address");
+	}
+	baseUrl = new URL(`http://127.0.0.1:${address.port}/mcp`);
+
+	afterAll(async () => {
+		await new Promise<void>((resolve) => httpServer.close(() => resolve()));
+	});
+});
+
+describe("generateCli", () => {
+	it("creates a standalone CLI and bundled executable", async () => {
+		const inline = JSON.stringify({
+			name: "integration",
+			description: "Test integration server",
+			command: baseUrl.toString(),
+			tokenCacheDir: path.join(tmpDir, "schema-cache"),
+		});
+		await fs.mkdir(path.join(tmpDir, "schema-cache"), { recursive: true });
+		const outputPath = path.join(tmpDir, "integration-cli.ts");
+		const bundlePath = path.join(tmpDir, "integration-cli.cjs");
+
+		const exec = await import("node:child_process");
+		await new Promise<void>((resolve, reject) => {
+			exec.exec("pnpm build", execOptions(), (error) => {
+				if (error) {
+					reject(error);
+					return;
+				}
+				resolve();
+			});
+		});
+
+		const { outputPath: generated, bundlePath: bundled } = await generateCli({
+			serverRef: inline,
+			outputPath,
+			bundle: bundlePath,
+			timeoutMs: 5_000,
+		});
+		if (!bundled) {
+			throw new Error("Expected bundled output path when --bundle is provided");
+		}
+
+		const tsContent = await fs.readFile(generated, "utf8");
+		expect(tsContent).toContain("Standalone CLI generated for the ");
+		expect(await exists(bundled)).toBe(true);
+
+		const { stdout } = await new Promise<{ stdout: string; stderr: string }>(
+			(resolve, reject) => {
+				exec.execFile(
+					bundled,
+					["list-tools"],
+					execOptions(),
+					(error, stdout, stderr) => {
+						if (error) {
+							reject(error);
+							return;
+						}
+						resolve({ stdout, stderr });
+					},
+				);
+			},
+		);
+		expect(stdout).toContain("Available tools");
+
+		const { stdout: callStdout } = await new Promise<{
+			stdout: string;
+			stderr: string;
+		}>((resolve, reject) => {
+			exec.execFile(
+				bundled,
+				["add", "--a", "2", "--b", "3", "--output", "json"],
+				execOptions(),
+				(error, stdout, stderr) => {
+					if (error) {
+						reject(error);
+						return;
+					}
+					resolve({ stdout, stderr });
+				},
+			);
+		});
+		expect(callStdout).toContain("result");
+
+		const cachePath = path.join(tmpDir, "schema-cache", "schema.json");
+		const cacheRaw = await fs.readFile(cachePath, "utf8");
+		const cacheData = JSON.parse(cacheRaw) as {
+			tools: Record<string, unknown>;
+		};
+		expect(Object.keys(cacheData.tools)).toContain("add");
+
+		// --raw path exercised implicitly by runtime when needed; end-to-end call
+		// verification is covered in runtime integration tests.
+	}, 20_000);
+});
+
+async function exists(file: string | undefined): Promise<boolean> {
+	if (!file) return false;
+	try {
+		await fs.access(file);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function execOptions() {
+	return { cwd: process.cwd(), env: { ...process.env, NODE_NO_WARNINGS: "1" } };
+}

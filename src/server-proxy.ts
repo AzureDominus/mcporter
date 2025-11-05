@@ -5,6 +5,7 @@ import type {
 	Runtime,
 	ServerToolInfo,
 } from "./runtime.js";
+import { readSchemaCache, writeSchemaCache } from "./schema-cache.js";
 
 type ToolCallOptions = CallOptions & { args?: unknown };
 type ToolArguments = CallOptions["args"];
@@ -23,6 +24,22 @@ type ToolSchemaInfo = {
 	requiredKeys: string[];
 	propertySet: Set<string>;
 };
+
+const KNOWN_OPTION_KEYS = new Set([
+	"tailLog",
+	"timeout",
+	"stream",
+	"streamLog",
+	"mimeType",
+	"metadata",
+	"log",
+]);
+
+export interface ServerProxyOptions {
+	readonly mapPropertyToTool?: (property: string | symbol) => string;
+	readonly cacheSchemas?: boolean;
+	readonly initialSchemas?: Record<string, unknown>;
+}
 
 function defaultToolNameMapper(propertyKey: string | symbol): string {
 	if (typeof propertyKey !== "string") {
@@ -129,18 +146,82 @@ function validateRequired(meta: ToolSchemaInfo, args?: ToolArguments): void {
 export function createServerProxy(
 	runtime: Runtime,
 	serverName: string,
-	mapPropertyToTool: (
-		property: string | symbol,
-	) => string = defaultToolNameMapper,
+	mapOrOptions?: ((property: string | symbol) => string) | ServerProxyOptions,
+	maybeOptions?: ServerProxyOptions,
 ): ServerProxy {
+	let mapPropertyToTool = defaultToolNameMapper;
+	let options: ServerProxyOptions | undefined;
+
+	if (typeof mapOrOptions === "function") {
+		mapPropertyToTool = mapOrOptions;
+		options = maybeOptions;
+	} else if (mapOrOptions) {
+		options = mapOrOptions;
+		if (typeof mapOrOptions.mapPropertyToTool === "function") {
+			mapPropertyToTool = mapOrOptions.mapPropertyToTool;
+		}
+	}
+
+	const cacheSchemas = options?.cacheSchemas ?? true;
+	const initialSchemas = options?.initialSchemas ?? undefined;
+
 	const toolSchemaCache = new Map<string, ToolSchemaInfo>();
+	const persistedSchemas = new Map<string, Record<string, unknown>>();
 	let schemaFetch: Promise<void> | null = null;
+	let diskLoad: Promise<void> | null = null;
+	let persistPromise: Promise<void> | null = null;
+	let refreshPending = false;
+
+	let definitionForCache: ReturnType<Runtime["getDefinition"]> | undefined;
+	if (cacheSchemas) {
+		try {
+			definitionForCache = runtime.getDefinition(serverName);
+		} catch {
+			definitionForCache = undefined;
+		}
+	}
+
+	if (cacheSchemas && !initialSchemas && definitionForCache) {
+		diskLoad = loadSchemasFromDisk(definitionForCache);
+		refreshPending = true;
+	}
+
+	if (initialSchemas) {
+		for (const [key, schemaRaw] of Object.entries(initialSchemas)) {
+			storeSchema(key, schemaRaw);
+		}
+		persistPromise = persistSchemas();
+	}
+
+	async function consumePersist(): Promise<void> {
+		if (!persistPromise) {
+			return;
+		}
+		try {
+			await persistPromise;
+		} finally {
+			persistPromise = null;
+		}
+	}
 
 	async function ensureMetadata(
 		toolName: string,
 	): Promise<ToolSchemaInfo | undefined> {
-		if (toolSchemaCache.has(toolName)) {
-			return toolSchemaCache.get(toolName);
+		await consumePersist();
+		const cached = toolSchemaCache.get(toolName);
+		if (cached && !refreshPending) {
+			return cached;
+		}
+
+		if (diskLoad) {
+			try {
+				await diskLoad;
+			} finally {
+				diskLoad = null;
+			}
+			if (toolSchemaCache.has(toolName) && !refreshPending) {
+				return toolSchemaCache.get(toolName);
+			}
 		}
 
 		if (!schemaFetch) {
@@ -148,14 +229,13 @@ export function createServerProxy(
 				.listTools(serverName, { includeSchema: true })
 				.then((tools) => {
 					for (const tool of tools) {
-						const info = createToolSchemaInfo(tool.inputSchema);
-						if (!info) {
+						if (!tool.inputSchema || typeof tool.inputSchema !== "object") {
 							continue;
 						}
-						toolSchemaCache.set(tool.name, info);
-						const normalized = mapPropertyToTool(tool.name);
-						toolSchemaCache.set(normalized, info);
+						storeSchema(tool.name, tool.inputSchema);
 					}
+					persistPromise = persistSchemas();
+					refreshPending = false;
 				})
 				.catch((error) => {
 					schemaFetch = null;
@@ -164,7 +244,53 @@ export function createServerProxy(
 		}
 
 		await schemaFetch;
+		await consumePersist();
 		return toolSchemaCache.get(toolName);
+	}
+
+	function storeSchema(key: string, schemaRaw: unknown) {
+		const info = createToolSchemaInfo(schemaRaw);
+		if (!info) {
+			return;
+		}
+		const canonical = mapPropertyToTool(key);
+		toolSchemaCache.set(canonical, info);
+		if (canonical !== key) {
+			toolSchemaCache.set(key, info);
+		}
+		if (cacheSchemas && definitionForCache && isPlainObject(schemaRaw)) {
+			persistedSchemas.set(canonical, schemaRaw as Record<string, unknown>);
+		}
+	}
+
+	async function loadSchemasFromDisk(
+		definition: ReturnType<Runtime["getDefinition"]>,
+	): Promise<void> {
+		try {
+			const snapshot = await readSchemaCache(definition);
+			if (!snapshot) {
+				return;
+			}
+			for (const [key, schemaRaw] of Object.entries(snapshot.tools)) {
+				storeSchema(key, schemaRaw);
+			}
+		} catch {
+			// ignore cache read failures
+		}
+	}
+
+	function persistSchemas(): Promise<void> | null {
+		if (!cacheSchemas || !definitionForCache || persistedSchemas.size === 0) {
+			return null;
+		}
+		const definition = definitionForCache;
+		const snapshot = {
+			updatedAt: new Date().toISOString(),
+			tools: Object.fromEntries(persistedSchemas.entries()),
+		};
+		return writeSchemaCache(definition, snapshot).catch(() => {
+			// best-effort persistence
+		});
 	}
 
 	const base: ServerProxy = {
@@ -205,7 +331,8 @@ export function createServerProxy(
 						const treatAsArgs =
 							schemaInfo !== undefined &&
 							keys.length > 0 &&
-							keys.every((key) => schemaInfo.propertySet.has(key));
+							(keys.every((key) => schemaInfo.propertySet.has(key)) ||
+								keys.every((key) => !KNOWN_OPTION_KEYS.has(key)));
 
 						if (treatAsArgs) {
 							Object.assign(argsAccumulator, arg as Record<string, unknown>);
@@ -259,24 +386,18 @@ export function createServerProxy(
 
 					if (combinedArgs !== undefined) {
 						combinedArgs = applyDefaults(schema, combinedArgs);
-						finalOptions.args = combinedArgs;
 					} else {
 						const defaults = applyDefaults(schema, undefined);
-						if (isPlainObject(defaults) && Object.keys(defaults).length > 0) {
-							finalOptions.args = defaults;
+						if (defaults && typeof defaults === "object") {
+							combinedArgs = defaults as ToolArguments;
 						}
 					}
 
-					validateRequired(schema, finalOptions.args as ToolArguments);
+					validateRequired(schema, combinedArgs);
 				} else {
-					if (positional.length > 0 && combinedArgs === undefined) {
-						combinedArgs = (
-							positional.length === 1
-								? positional[0]
-								: (positional as unknown[])
-						) as ToolArguments;
+					if (positional.length > 0) {
+						combinedArgs = positional as unknown as ToolArguments;
 					}
-
 					if (Object.keys(argsAccumulator).length > 0) {
 						const baseArgs = isPlainObject(combinedArgs)
 							? { ...(combinedArgs as Record<string, unknown>) }
@@ -284,10 +405,10 @@ export function createServerProxy(
 						Object.assign(baseArgs, argsAccumulator);
 						combinedArgs = baseArgs as ToolArguments;
 					}
+				}
 
-					if (combinedArgs !== undefined) {
-						finalOptions.args = combinedArgs;
-					}
+				if (combinedArgs !== undefined) {
+					finalOptions.args = combinedArgs;
 				}
 
 				const result = await runtime.callTool(

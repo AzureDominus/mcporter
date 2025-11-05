@@ -93,6 +93,44 @@ When a server entry declares `"auth": "oauth"`, the CLI/runtime will:
 
 To reset credentials, delete that directory and rerun the command—`mcp-runtime` will trigger a fresh login.
 
+### Generate Standalone CLIs
+
+`mcp-runtime` can mint a fully standalone CLI for any server—handy when you want a single-purpose tool with friendly flags. You do **not** need an on-disk config; just pass an inline definition:
+
+```bash
+npx mcp-runtime generate-cli \
+  --server '{
+    "name":"context7",
+    "command":"https://mcp.context7.com/mcp",
+    "headers":{
+      "Authorization":"Bearer ${CONTEXT7_API_KEY}"
+    }
+  }' \
+  --output generated/context7-cli.ts
+
+# Run the generated TypeScript directly (Node)
+pnpm exec tsx generated/context7-cli.ts list-tools
+pnpm exec tsx generated/context7-cli.ts get-library-docs --library-name react
+```
+
+Want a single file you can ship to agents or drop on a PATH? Bundle it:
+
+```bash
+# Emit a Bun-friendly executable with embedded schema defaults
+npx mcp-runtime generate-cli \
+  --server '{"name":"context7","command":"https://mcp.context7.com/mcp"}' \
+  --runtime bun \
+  --bundle dist/context7-cli.js
+
+# Grant execute permission once, then run anywhere Bun is installed
+chmod +x dist/context7-cli.js
+CONTEXT7_API_KEY=sk-... ./dist/context7-cli.js resolve-library-id react
+
+# The same command works with Node by omitting --runtime bun (bundles as CJS)
+```
+
+Generated CLIs embed the discovered schemas, so subsequent executions skip `listTools` round-trips and hit the network only for real tool calls. Use `--bundle` without a value to auto-name the output, and pass `--timeout` to raise the per-call default (30s).
+
 ## Composable Workflows
 
 The package exports a thin runtime that lets you compose multiple MCP calls and post-process the results entirely in TypeScript. The example in `examples/context7-headlines.ts` demonstrates how to:
