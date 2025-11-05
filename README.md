@@ -81,14 +81,6 @@ When a server entry declares `"auth": "oauth"`, the CLI/runtime will:
 
 To reset credentials, delete that directory and rerun the command—`mcp-runtime` will trigger a fresh login.
 
-## Migrating from `pnpm mcp:*`
-
-- `pnpm mcp:list` → `npx mcp-runtime list`
-- `pnpm mcp:call server.tool key=value` → `npx mcp-runtime call server.tool key=value`
-- `--schema` and `--tail-log` are new optional flags to surface schemas or follow log output.
-
-A detailed migration checklist lives in [`docs/migration.md`](docs/migration.md).
-
 ## Testing & CI
 
 | Command | Purpose |
