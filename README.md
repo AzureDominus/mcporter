@@ -1,13 +1,13 @@
 # mcp-runtime 🔌
 
-A modern TypeScript runtime and CLI for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). `mcp-runtime` replaces the Python-based `pnpm mcp:*` helpers with an ergonomic, composable package that works equally well for command-line operators and long-running agents.
+A modern TypeScript runtime and CLI for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). `mcp-runtime` packages an ergonomic, composable toolkit that works equally well for command-line operators and long-running agents.
 
 ## Features
 
-- **Zero-config CLI** – `npx mcp-runtime list` and `npx mcp-runtime call` mirror the existing Sweetistics workflows while adding niceties such as `--tail-log`.
+- **Zero-config CLI** – `npx mcp-runtime list` and `npx mcp-runtime call` get you from install to tool execution quickly, with niceties such as `--tail-log`.
 - **Composable runtime API** – `createRuntime()` pools connections, handles retries, and exposes a typed interface for Bun/Node agents.
 - **OAuth support** – automatic browser launches, local callback server, and token persistence under `~/.mcp-runtime/<server>/` (compatible with existing `token_cache_dir` overrides).
-- **Structured configuration** – reuses `config/mcp_servers.json` entries, expanding `${ENV}` placeholders, stdio wrappers, and headers exactly as the Python helper did.
+- **Structured configuration** – loads `config/mcp_servers.json` entries, expanding `${ENV}` placeholders, stdio wrappers, and headers in a predictable way.
 - **Integration-ready** – ships with unit and integration tests (including a streamable HTTP fixture) plus GitHub Actions CI, so changes remain trustworthy.
 
 ## Installation
@@ -64,7 +64,7 @@ npx mcp-runtime list vercel --schema          # show tool signatures + schemas
 npx mcp-runtime call linear.searchIssues owner=ENG status=InProgress
 npx mcp-runtime call signoz.query --tail-log  # print the tail of returned log files
 
-# local scripts mirroring the Sweetistics workflow
+# Local scripts for workspace automation
 pnpm mcp:list                                 # alias for mcp-runtime list
 pnpm mcp:call chrome-devtools.getTabs --tail-log
 ```
