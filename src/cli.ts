@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import { createRuntime } from "./runtime.js";
 
 type FlagMap = Partial<Record<string, string>>;
@@ -125,13 +126,16 @@ async function handleCall(
 		try {
 			const decoded = JSON.parse(result);
 			console.log(JSON.stringify(decoded, null, 2));
+			tailLogIfRequested(decoded, parsed.tailLog ?? false);
 		} catch {
 			console.log(result);
+			tailLogIfRequested(result, parsed.tailLog ?? false);
 		}
 		return;
 	}
 
 	console.log(JSON.stringify(result, null, 2));
+	tailLogIfRequested(result, parsed.tailLog ?? false);
 }
 
 function extractListFlags(args: string[]): { schema: boolean } {
@@ -154,10 +158,11 @@ interface CallArgsParseResult {
 	server?: string;
 	tool?: string;
 	args: Record<string, unknown>;
+	tailLog?: boolean;
 }
 
 function parseCallArguments(args: string[]): CallArgsParseResult {
-	const result: CallArgsParseResult = { args: {} };
+	const result: CallArgsParseResult = { args: {}, tailLog: false };
 	let index = 0;
 	while (index < args.length) {
 		const token = args[index];
@@ -198,6 +203,11 @@ function parseCallArguments(args: string[]): CallArgsParseResult {
 				throw new Error(`Unable to parse --args: ${(error as Error).message}`);
 			}
 			args.splice(index, 2);
+			continue;
+		}
+		if (token === "--tail-log") {
+			result.tailLog = true;
+			args.splice(index, 1);
 			continue;
 		}
 		index += 1;
@@ -250,6 +260,51 @@ function indent(text: string, pad: string): string {
 		.join("\n");
 }
 
+function tailLogIfRequested(result: unknown, enabled: boolean): void {
+	if (!enabled) {
+		return;
+	}
+	const candidates: string[] = [];
+	if (typeof result === "string") {
+		const idx = result.indexOf(":");
+		if (idx !== -1) {
+			const candidate = result.slice(idx + 1).trim();
+			if (candidate) {
+				candidates.push(candidate);
+			}
+		}
+	}
+	if (result && typeof result === "object") {
+		const possibleKeys = ["logPath", "logFile", "logfile", "path"];
+		for (const key of possibleKeys) {
+			const value = (result as Record<string, unknown>)[key];
+			if (typeof value === "string") {
+				candidates.push(value);
+			}
+		}
+	}
+
+	for (const candidate of candidates) {
+		if (!fs.existsSync(candidate)) {
+			console.warn(`[warn] Log path not found: ${candidate}`);
+			continue;
+		}
+		try {
+			const content = fs.readFileSync(candidate, "utf8");
+			const lines = content.trimEnd().split(/\r?\n/);
+			const tail = lines.slice(-20);
+			console.log(`--- tail ${candidate} ---`);
+			for (const line of tail) {
+				console.log(line);
+			}
+		} catch (error) {
+			console.warn(
+				`[warn] Failed to read log file ${candidate}: ${(error as Error).message}`,
+			);
+		}
+	}
+}
+
 function printHelp(message?: string): void {
 	if (message) {
 		console.error(message);
@@ -258,12 +313,13 @@ function printHelp(message?: string): void {
 	console.error(`Usage: mcp-runtime <command> [options]
 
 Commands:
-  list [name] [--schema]          List configured MCP servers (and tools for a server)
-  call [selector] [flags]         Call a tool (selector like server.tool)
+  list [name] [--schema]             List configured MCP servers (and tools for a server)
+  call [selector] [flags]            Call a tool (selector like server.tool)
+    --tail-log                       Tail log output when the tool returns a log file path
 
 Global flags:
-  --config <path>                 Path to mcp_servers.json (defaults to ./config/mcp_servers.json)
-  --root <path>                   Root directory for stdio command cwd
+  --config <path>                    Path to mcp_servers.json (defaults to ./config/mcp_servers.json)
+  --root <path>                      Root directory for stdio command cwd
 `);
 }
 

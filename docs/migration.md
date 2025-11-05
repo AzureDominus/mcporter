@@ -1,0 +1,76 @@
+---
+summary: 'How to migrate from pnpm mcp:* wrappers to the mcp-runtime package.'
+---
+
+# Migration Guide
+
+This guide walks through replacing the Python-based `pnpm mcp:*` helpers with the new TypeScript runtime and CLI.
+
+## 1. Install
+
+```bash
+pnpm add mcp-runtime
+# or
+yarn add mcp-runtime
+# or
+npm install mcp-runtime
+```
+
+## 2. Update Scripts
+
+- Replace `pnpm mcp:list` with `npx mcp-runtime list`.
+- Replace `pnpm mcp:call <server>.<tool> key=value` with `npx mcp-runtime call <server>.<tool> key=value`.
+- Add `--config <path>` if your configuration is not under `./config/mcp_servers.json`.
+- Append `--tail-log` to stream the last 20 lines of any log file returned by the tool.
+
+## 3. OAuth Tokens
+
+- Tokens are saved under `~/.mcp-runtime/<server>/` by default.
+- To force a fresh login, delete that directory and rerun the command; the CLI will relaunch the browser.
+- Custom `token_cache_dir` entries in `mcp_servers.json` continue to work as explicit overrides.
+
+## 4. Programmatic Usage
+
+```ts
+import { createRuntime } from "mcp-runtime";
+
+const runtime = await createRuntime({ configPath: "./config/mcp_servers.json" });
+const tools = await runtime.listTools("chrome-devtools");
+await runtime.callTool("chrome-devtools", "take_screenshot", { args: { url: "https://x.com" } });
+await runtime.close();
+```
+
+Prefer `createRuntime` for long-lived agents so connections and OAuth tokens can be reused.
+
+## 5. Single Call Helper
+
+```ts
+import { callOnce } from "mcp-runtime";
+
+await callOnce({
+  server: "firecrawl",
+  toolName: "crawl",
+  args: { url: "https://anthropic.com" },
+});
+```
+
+Use `callOnce` for fire-and-forget invocations.
+
+## 6. Environment Variables
+
+- `LINEAR_API_KEY`, `FIRECRAWL_API_KEY`, and similar tokens are read exactly as before via `${VAR}` syntax.
+- `${VAR:-default}` continues to work; empty values are ignored.
+- `$env:VAR` placeholders resolve to raw OS environment variables.
+
+## 7. Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Browser did not open | Copy the printed OAuth URL manually into a browser. |
+| Authorization hangs | Ensure the callback URL can bind to `127.0.0.1`; firewalls may block it. |
+| Tokens are stale | Delete `~/.mcp-runtime/<server>/tokens.json` and retry. |
+| Stdio command fails | Pass `--root` to point at the repo root so relative paths resolve. |
+
+---
+
+For deeper architectural notes and future work, see [`docs/spec.md`](./spec.md).

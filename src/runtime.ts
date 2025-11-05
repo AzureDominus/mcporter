@@ -12,6 +12,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { loadServerDefinitions, type ServerDefinition } from "./config.js";
 import { withEnvOverrides } from "./env.js";
+import { createOAuthSession, type OAuthSession } from "./oauth.js";
 
 const PACKAGE_NAME = "mcp-runtime";
 const CLIENT_VERSION = "0.0.1";
@@ -73,6 +74,7 @@ interface ClientContext {
 	readonly client: Client;
 	readonly transport: Transport & { close(): Promise<void> };
 	readonly definition: ServerDefinition;
+	readonly oauthSession?: OAuthSession;
 }
 
 export async function createRuntime(
@@ -201,6 +203,7 @@ class McpRuntime implements Runtime {
 				return;
 			}
 			await context.transport.close().catch(() => {});
+			await context.oauthSession?.close().catch(() => {});
 			this.clients.delete(normalized);
 			return;
 		}
@@ -209,6 +212,7 @@ class McpRuntime implements Runtime {
 			try {
 				const context = await promise;
 				await context.transport.close().catch(() => {});
+				await context.oauthSession?.close().catch(() => {});
 			} finally {
 				this.clients.delete(name);
 			}
@@ -221,6 +225,11 @@ class McpRuntime implements Runtime {
 		const client = new Client(this.clientInfo);
 
 		return withEnvOverrides(definition.env, async () => {
+			let oauthSession: OAuthSession | undefined;
+			if (definition.auth === "oauth") {
+				oauthSession = await createOAuthSession(definition, this.logger);
+			}
+
 			if (definition.command.kind === "stdio") {
 				const transport = new StdioClientTransport({
 					command: definition.command.command,
@@ -228,41 +237,108 @@ class McpRuntime implements Runtime {
 					cwd: definition.command.cwd,
 				});
 				await client.connect(transport);
-				return { client, transport, definition };
+				return { client, transport, definition, oauthSession };
 			}
 
 			const requestInit: RequestInit = definition.command.headers
 				? { headers: definition.command.headers as HeadersInit }
 				: {};
 
+			const baseOptions = {
+				requestInit,
+				authProvider: oauthSession?.provider,
+			};
+
 			const streamableTransport = new StreamableHTTPClientTransport(
 				definition.command.url,
-				{
-					requestInit,
-				},
+				baseOptions,
 			);
 
 			try {
-				await client.connect(streamableTransport);
-				return { client, transport: streamableTransport, definition };
-			} catch (error) {
-				await streamableTransport.close().catch(() => {});
-				if (error instanceof UnauthorizedError) {
-					this.logger.warn(
-						`Authentication required for '${definition.name}'. OAuth flows are not yet implemented in mcp-runtime.`,
+				try {
+					await this.connectWithAuth(
+						client,
+						streamableTransport,
+						oauthSession,
+						definition.name,
 					);
-					throw error;
+					return {
+						client,
+						transport: streamableTransport,
+						definition,
+						oauthSession,
+					};
+				} catch (error) {
+					await streamableTransport.close().catch(() => {});
+					this.logger.info(
+						`Falling back to SSE transport for '${definition.name}': ${(error as Error).message}`,
+					);
+					const sseTransport = new SSEClientTransport(definition.command.url, {
+						...baseOptions,
+					});
+					await this.connectWithAuth(
+						client,
+						sseTransport,
+						oauthSession,
+						definition.name,
+					);
+					return { client, transport: sseTransport, definition, oauthSession };
 				}
-				this.logger.info(
-					`Falling back to SSE transport for '${definition.name}': ${(error as Error).message}`,
-				);
-				const sseTransport = new SSEClientTransport(definition.command.url, {
-					requestInit,
-				});
-				await client.connect(sseTransport);
-				return { client, transport: sseTransport, definition };
+			} catch (error) {
+				await oauthSession?.close().catch(() => {});
+				throw error;
 			}
 		});
+	}
+
+	private async connectWithAuth(
+		client: Client,
+		transport: Transport & {
+			close(): Promise<void>;
+			finishAuth?: (authorizationCode: string) => Promise<void>;
+		},
+		session?: OAuthSession,
+		serverName?: string,
+		maxAttempts = 3,
+	): Promise<void> {
+		let attempt = 0;
+		while (true) {
+			try {
+				await client.connect(transport);
+				return;
+			} catch (error) {
+				if (!(error instanceof UnauthorizedError) || !session) {
+					throw error;
+				}
+				attempt += 1;
+				if (attempt > maxAttempts) {
+					throw error;
+				}
+				this.logger.warn(
+					`OAuth authorization required for '${serverName ?? "unknown"}'. Waiting for browser approval...`,
+				);
+				try {
+					const code = await session.waitForAuthorizationCode();
+					if (typeof transport.finishAuth === "function") {
+						await transport.finishAuth(code);
+						this.logger.info(
+							"Authorization code accepted. Retrying connection...",
+						);
+					} else {
+						this.logger.warn(
+							"Transport does not support finishAuth; cannot complete OAuth flow automatically.",
+						);
+						throw error;
+					}
+				} catch (authError) {
+					this.logger.error(
+						"OAuth authorization failed while waiting for callback.",
+						authError,
+					);
+					throw authError;
+				}
+			}
+		}
 	}
 }
 
