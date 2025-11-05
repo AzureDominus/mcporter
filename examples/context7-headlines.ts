@@ -5,54 +5,47 @@
  * and print only the markdown headlines.
  */
 
-import { createRuntime, createServerProxy } from "../src/index.ts";
+import {
+	createRuntime,
+	createServerProxy,
+	type CallResult,
+} from "../src/index.js";
 
 async function main(): Promise<void> {
-  const runtime = await createRuntime();
-  const context7 = createServerProxy(runtime, "context7");
-  try {
-    const resolveResult = await context7.resolveLibraryId({ libraryName: "react" });
-    const resultText = Array.isArray(resolveResult?.content)
-      ? resolveResult.content
-          .map((entry) =>
-            entry && typeof entry === "object" && "text" in entry
-              ? String(entry.text ?? "")
-              : "",
-          )
-          .join("\n")
-      : "";
-    const idMatch = resultText.match(
-      /Context7-compatible library ID:\s*([^\s]+)/,
-    );
-    const target = idMatch?.[1];
-    if (!target) {
-      console.error("No Context7-compatible library ID resolved for React.");
-      return;
-    }
+	const runtime = await createRuntime();
+	try {
+		const context7 = createServerProxy(runtime, "context7");
 
-    const docs = await context7.getLibraryDocs({ context7CompatibleLibraryID: target });
-    const markdown = Array.isArray(docs?.content)
-      ? docs.content
-          .map((entry) =>
-            entry && typeof entry === "object" && "text" in entry
-              ? String(entry.text ?? "")
-              : "",
-          )
-          .join("\n")
-      : "";
-    const headlines = markdown
-      .split("\n")
-      .filter((line) => /^#+\s/.test(line))
-      .join("\n");
+		const resolveResult = (await context7.resolveLibraryId({
+			libraryName: "react",
+		})) as CallResult;
+		const identifierText = resolveResult.text() ?? "";
+		const idMatch = identifierText.match(
+			/Context7-compatible library ID:\s*([^\s]+)/,
+		);
+		const target = idMatch?.[1];
+		if (!target) {
+			console.error("No Context7-compatible library ID resolved for React.");
+			return;
+		}
 
-    console.log(`# Headlines for ${target}`);
-    console.log(headlines || "(no headlines found)");
-  } finally {
-    await runtime.close();
-  }
+		const docs = (await context7.getLibraryDocs({
+			context7CompatibleLibraryID: target,
+		})) as CallResult;
+		const markdown = docs.markdown() ?? docs.text() ?? "";
+		const headlines = markdown
+			.split("\n")
+			.filter((line) => /^#+\s/.test(line))
+			.join("\n");
+
+		console.log(`# Headlines for ${target}`);
+		console.log(headlines || "(no headlines found)");
+	} finally {
+		await runtime.close();
+	}
 }
 
 main().catch((error) => {
-  console.error(error);
-  process.exit(1);
+	console.error(error);
+	process.exit(1);
 });

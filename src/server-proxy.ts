@@ -1,9 +1,21 @@
+import { createCallResult } from "./result-utils.js";
 import type {
 	CallOptions,
 	ListToolsOptions,
 	Runtime,
 	ServerToolInfo,
 } from "./runtime.js";
+
+type ToolCallOptions = CallOptions & { args?: unknown };
+type ToolArguments = CallOptions["args"];
+
+type ServerProxy = {
+	call(
+		toolName: string,
+		options?: ToolCallOptions,
+	): Promise<ReturnType<typeof createCallResult>>;
+	listTools(options?: ListToolsOptions): Promise<ServerToolInfo[]>;
+};
 
 function defaultToolNameMapper(propertyKey: string | symbol): string {
 	if (typeof propertyKey !== "string") {
@@ -15,12 +27,66 @@ function defaultToolNameMapper(propertyKey: string | symbol): string {
 		.toLowerCase();
 }
 
-type ToolCallOptions = CallOptions & { args?: unknown };
+function applyDefaults(schema: unknown, args: ToolArguments): ToolArguments {
+	if (
+		!schema ||
+		typeof schema !== "object" ||
+		(schema as Record<string, unknown>).type !== "object"
+	) {
+		return args;
+	}
 
-type ServerProxy = {
-	call(toolName: string, options?: ToolCallOptions): Promise<unknown>;
-	listTools(options?: ListToolsOptions): Promise<ServerToolInfo[]>;
-};
+	const properties = (schema as Record<string, unknown>).properties;
+	if (!properties || typeof properties !== "object") {
+		return args;
+	}
+
+	if (!args || typeof args !== "object") {
+		args = {} as ToolArguments;
+	}
+
+	const source: Record<string, unknown> = {
+		...(args as Record<string, unknown>),
+	};
+
+	for (const [key, value] of Object.entries(properties)) {
+		if (
+			value &&
+			typeof value === "object" &&
+			"default" in (value as Record<string, unknown>) &&
+			source[key] === undefined
+		) {
+			source[key] = (value as Record<string, unknown>).default as unknown;
+		}
+	}
+
+	return source as ToolArguments;
+}
+
+function validateRequired(schema: unknown, args: ToolArguments): void {
+	if (
+		!schema ||
+		typeof schema !== "object" ||
+		(schema as Record<string, unknown>).type !== "object"
+	) {
+		return;
+	}
+	const required = (schema as Record<string, unknown>).required;
+	if (!Array.isArray(required) || required.length === 0) {
+		return;
+	}
+	if (!args || typeof args !== "object") {
+		throw new Error(`Missing required arguments: ${required.join(", ")}`);
+	}
+
+	const missing = required.filter(
+		(key) => (args as Record<string, unknown>)[key] === undefined,
+	);
+
+	if (missing.length > 0) {
+		throw new Error(`Missing required arguments: ${missing.join(", ")}`);
+	}
+}
 
 export function createServerProxy(
 	runtime: Runtime,
@@ -29,9 +95,46 @@ export function createServerProxy(
 		property: string | symbol,
 	) => string = defaultToolNameMapper,
 ): ServerProxy {
+	const toolSchemaCache = new Map<string, unknown>();
+	let schemaFetch: Promise<void> | null = null;
+
+	async function ensureMetadata(toolName: string): Promise<unknown> {
+		if (toolSchemaCache.has(toolName)) {
+			return toolSchemaCache.get(toolName);
+		}
+
+		if (!schemaFetch) {
+			schemaFetch = runtime
+				.listTools(serverName, { includeSchema: true })
+				.then((tools) => {
+					for (const tool of tools) {
+						const schema = tool.inputSchema;
+						if (schema) {
+							toolSchemaCache.set(tool.name, schema);
+							const normalized = mapPropertyToTool(tool.name);
+							toolSchemaCache.set(normalized, schema);
+						}
+					}
+				})
+				.catch((error) => {
+					schemaFetch = null;
+					throw error;
+				});
+		}
+
+		await schemaFetch;
+		return toolSchemaCache.get(toolName);
+	}
+
 	const base: ServerProxy = {
-		call: (toolName: string, options?: ToolCallOptions) =>
-			runtime.callTool(serverName, toolName, options ?? {}),
+		call: async (toolName: string, options?: ToolCallOptions) => {
+			const result = await runtime.callTool(
+				serverName,
+				toolName,
+				options ?? {},
+			);
+			return createCallResult(result);
+		},
 		listTools: (options) => runtime.listTools(serverName, options),
 	};
 
@@ -60,11 +163,32 @@ export function createServerProxy(
 					) {
 						Object.assign(finalOptions, firstArg as ToolCallOptions);
 					} else {
-						finalOptions.args = firstArg as ToolCallOptions["args"];
+						finalOptions.args = firstArg as ToolArguments;
 					}
 				}
 
-				return runtime.callTool(serverName, toolName, finalOptions);
+				const schema = await ensureMetadata(toolName);
+				if (schema) {
+					if (finalOptions.args !== undefined) {
+						finalOptions.args = applyDefaults(
+							schema,
+							finalOptions.args as ToolArguments,
+						);
+					} else {
+						const defaults = applyDefaults(schema, undefined as ToolArguments);
+						if (defaults && typeof defaults === "object") {
+							finalOptions.args = defaults;
+						}
+					}
+					validateRequired(schema, finalOptions.args as ToolArguments);
+				}
+
+				const result = await runtime.callTool(
+					serverName,
+					toolName,
+					finalOptions,
+				);
+				return createCallResult(result);
 			};
 		},
 	});

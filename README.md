@@ -112,10 +112,17 @@ const runtime = await createRuntime();
 const context7 = createServerProxy(runtime, "context7");
 
 const search = await context7.resolveLibraryId({ libraryName: "react" });
-const docs = await context7.getLibraryDocs({ context7CompatibleLibraryID: "/websites/react_dev" });
+const docs = await context7.getLibraryDocs({
+	context7CompatibleLibraryID: "/websites/react_dev",
+});
+
+console.log(search.text()); // "Available Libraries ..."
+console.log(docs.markdown()); // markdown excerpt
+
+await runtime.close();
 ```
 
-Every property access maps from camelCase to the underlying tool name automatically (`resolveLibraryId` → `resolve-library-id`). You can still drop down to `context7.call("resolve-library-id", { args: { ... } })` when you need explicit control.
+Every property access maps from camelCase to the underlying tool name automatically (`resolveLibraryId` → `resolve-library-id`). Proxy methods return a `CallResult` wrapper with `.raw`, `.text()`, `.markdown()`, `.json()`, and other helpers so scripts stay terse. You can still drop down to `context7.call("resolve-library-id", { args: { ... } })` when you need explicit control.
 
 ## Testing & CI
 
