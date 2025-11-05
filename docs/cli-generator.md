@@ -50,6 +50,31 @@ Create an `mcp-runtime generate-cli` command that produces a standalone CLI for 
 - Runtime flag remains (`--runtime bun`) to tailor shebang/usage instructions, but Node.js is the default.
 - Generated CLI embeds the resolved server definition yet honors `--config`/`--server` overrides at execution time.
 
+## Usage Examples
+
+```bash
+# Inline definition, emit TypeScript + minified bundle
+npx mcp-runtime generate-cli \
+  --server '{
+    "name":"context7",
+    "command":"https://mcp.context7.com/mcp",
+    "headers":{"Authorization":"Bearer ${CONTEXT7_API_KEY}"}
+  }' \
+  --output generated/context7-cli.ts \
+  --bundle dist/context7-cli.cjs \
+  --minify
+
+# Bun-friendly binary using --compile (requires Bun installed)
+npx mcp-runtime generate-cli \
+  --server '{"name":"context7","command":"https://mcp.context7.com/mcp"}' \
+  --runtime bun \
+  --bundle dist/context7-cli.js \
+  --compile dist/context7-cli
+
+chmod +x dist/context7-cli
+CONTEXT7_API_KEY=sk-... ./dist/context7-cli list-tools
+```
+
 ## Status
 - ✅ `generate-cli` subcommand implemented with schema-aware proxy generation.
 - ✅ Inline JSON / file / shorthand server resolution wired up.
