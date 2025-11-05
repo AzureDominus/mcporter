@@ -18,7 +18,7 @@ async function main(): Promise<void> {
 			headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
 		},
 	};
-	// Inline definitions can also live in config/mcp_servers.json if you prefer shared config.
+	// Inline definitions can also live in config/mcp-runtime.json if you prefer shared config.
 
 	const mcpRuntime = await createRuntime({ servers: [context7Definition] });
 	try {

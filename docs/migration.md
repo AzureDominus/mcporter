@@ -20,21 +20,21 @@ npm install mcp-runtime
 
 - Replace `pnpm mcp:list` with `npx mcp-runtime list`.
 - Replace `pnpm mcp:call <server>.<tool> key=value` with `npx mcp-runtime call <server>.<tool> key=value`.
-- Add `--config <path>` if your configuration is not under `./config/mcp_servers.json`.
+- Add `--config <path>` if your configuration is not under `./config/mcp-runtime.json`.
 - Append `--tail-log` to stream the last 20 lines of any log file returned by the tool.
 
 ## 3. OAuth Tokens
 
 - Tokens are saved under `~/.mcp-runtime/<server>/` by default.
 - To force a fresh login, delete that directory and rerun the command; the CLI will relaunch the browser.
-- Custom `token_cache_dir` entries in `mcp_servers.json` continue to work as explicit overrides.
+- Custom `token_cache_dir` entries in `mcp-runtime.json` continue to work as explicit overrides.
 
 ## 4. Programmatic Usage
 
 ```ts
 import { createRuntime } from "mcp-runtime";
 
-const runtime = await createRuntime({ configPath: "./config/mcp_servers.json" });
+const runtime = await createRuntime({ configPath: "./config/mcp-runtime.json" });
 const tools = await runtime.listTools("chrome-devtools");
 await runtime.callTool("chrome-devtools", "take_screenshot", { args: { url: "https://x.com" } });
 await runtime.close();

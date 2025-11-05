@@ -7,7 +7,7 @@ summary: 'Plan for the mcp-runtime package replacing the Sweetistics pnpm MCP he
 > Inspired in part by Anthropic’s guidance on MCP code execution agents: https://www.anthropic.com/engineering/code-execution-with-mcp
 
 ## Goals
-- Provide a TypeScript runtime + CLI that exposes all MCP servers defined in `~/Projects/sweetistics/config/mcp_servers.json`.
+- Provide a TypeScript runtime + CLI that exposes all MCP servers defined in `~/Projects/sweetistics/config/mcp-runtime.json`.
 - Preserve current one-shot `pnpm mcp:call` ergonomics while enabling reusable connections for Bun/Node agents.
 - Keep feature parity with the Python helper (env interpolation, stdio wrapping, OAuth caching) and extend test coverage.
 
@@ -29,7 +29,7 @@ summary: 'Plan for the mcp-runtime package replacing the Sweetistics pnpm MCP he
   - Tool signature + schema fetching for `list`.
 - Provide lazy connection pooling per server to minimize startup cost.
 - Expose a lightweight server proxy (`createServerProxy`) that maps camelCase method accesses to tool names, fills JSON-schema defaults, validates required arguments, and returns a helper (`CallResult`) for extracting text/markdown/JSON without re-parsing the content envelope.
-- Document direct (inline) server definitions passed to `createRuntime({ servers: [...] })`, including env-sourced headers, so agents can bootstrap without touching config files.
+- Document Cursor-compatible `config/mcp-runtime.json` structure; support env-sourced headers and stdio commands while keeping inline overrides available for scripts.
 
 ## Schema-Aware Proxy Strategy
 - Cache tool schemas on first access; tolerate failures by falling back to raw `callTool`.
@@ -43,11 +43,10 @@ summary: 'Plan for the mcp-runtime package replacing the Sweetistics pnpm MCP he
 - Encourage lightweight composition helpers in examples (e.g., resolving then fetching Context7 docs) while keeping library exports generic.
 - Back the proxy with targeted unit tests that cover primitive-only calls, positional tuples + option bags, and error fallbacks when schemas are missing.
 
-## Configuration Sources
-- Merge definitions from repo `config/mcp_servers.json`, project `.mcp.json`, project/local Cursor (`.cursor/mcp.json`) and Claude (`.claude/mcp.json`) files, user-level Cursor (`~/.cursor/mcp.json`), Claude (`~/.claude.json` or `~/.claude/mcp.json`), Claude Desktop (`claude_desktop_config.json` in OS-specific app data), and Codex (`~/.codex/config.toml`).
-- Default merge strategy is first-wins; allow `last-wins` when requested (config file or runtime option).
-- Support `config/mcp_sources.json` with `{ "strategy": "...", "sources": [...] }` to customize order/paths and expose equivalent programmatic overrides via `loadServerDefinitions`.
-- Normalize JSON/TOML shapes into shared `ServerDefinition` objects without leaking tool-specific quirks; add fixture-driven tests to lock behavior down.
+## Configuration
+- Single file `config/mcp-runtime.json` mirrors Cursor/Claude schema: `mcpServers` map with entries containing `baseUrl` or `command`+`args`, optional `headers`, `env`, `description`, `auth`, `tokenCacheDir`, and convenience `bearerToken`/`bearerTokenEnv` fields.
+- Provide `configPath` override for scripts/tests; keep inline overrides in examples for completeness but default to file-based configuration.
+- Add fixtures validating HTTP vs. stdio normalization and header/env behavior.
 
 ## Work Phases
 1. **Scaffold Package**

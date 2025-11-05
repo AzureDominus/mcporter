@@ -10,12 +10,7 @@ import type {
 	CallToolRequest,
 	ListResourcesRequest,
 } from "@modelcontextprotocol/sdk/types.js";
-import {
-	type ConfigSourceDefinition,
-	loadServerDefinitions,
-	type MergeStrategy,
-	type ServerDefinition,
-} from "./config.js";
+import { loadServerDefinitions, type ServerDefinition } from "./config.js";
 import { resolveEnvPlaceholders, withEnvOverrides } from "./env.js";
 import { createOAuthSession, type OAuthSession } from "./oauth.js";
 
@@ -26,9 +21,6 @@ export interface RuntimeOptions {
 	readonly configPath?: string;
 	readonly servers?: ServerDefinition[];
 	readonly rootDir?: string;
-	readonly configSources?: ConfigSourceDefinition[];
-	readonly mergeStrategy?: MergeStrategy;
-	readonly sourcesConfigPath?: string;
 	readonly clientInfo?: {
 		name: string;
 		version: string;
@@ -94,9 +86,6 @@ export async function createRuntime(
 		(await loadServerDefinitions({
 			configPath: options.configPath,
 			rootDir: options.rootDir,
-			sources: options.configSources,
-			strategy: options.mergeStrategy,
-			sourcesConfigPath: options.sourcesConfigPath,
 		}));
 
 	const runtime = new McpRuntime(servers, options);

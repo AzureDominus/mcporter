@@ -357,7 +357,7 @@ Commands:
     --tail-log                       Tail log output when the tool returns a log file path
 
 Global flags:
-  --config <path>                    Path to mcp_servers.json (defaults to ./config/mcp_servers.json)
+  --config <path>                    Path to mcp-runtime.json (defaults to ./config/mcp-runtime.json)
   --root <path>                      Root directory for stdio command cwd
 `);
 }

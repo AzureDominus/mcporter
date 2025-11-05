@@ -34,7 +34,6 @@
     "mcp:call": "pnpm exec tsx src/cli.ts call"
   },
   "dependencies": {
-    "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.10.1",
     "zod": "^3.23.8"
   },

@@ -8,19 +8,13 @@ import {
 	withEnvOverrides,
 } from "../src/env.js";
 
-const FIXTURE_PATH = path.resolve(__dirname, "fixtures", "mcp_servers.json");
+const FIXTURE_PATH = path.resolve(__dirname, "fixtures", "mcp-runtime.json");
 
 describe("loadServerDefinitions", () => {
 	it("parses all Sweetistics servers", async () => {
 		const servers = await loadServerDefinitions({
+			configPath: FIXTURE_PATH,
 			rootDir: "/repo",
-			sources: [
-				{
-					kind: "local-json",
-					path: FIXTURE_PATH,
-					optional: false,
-				},
-			],
 		});
 		expect(servers).toHaveLength(9);
 		const names = servers.map((server) => server.name);
@@ -39,15 +33,7 @@ describe("loadServerDefinitions", () => {
 
 	it("resolves HTTP headers with environment placeholders", async () => {
 		process.env.LINEAR_API_KEY = "linear-secret";
-		const servers = await loadServerDefinitions({
-			sources: [
-				{
-					kind: "local-json",
-					path: FIXTURE_PATH,
-					optional: false,
-				},
-			],
-		});
+		const servers = await loadServerDefinitions({ configPath: FIXTURE_PATH });
 		const linear = servers.find((server) => server.name === "linear");
 		expect(linear?.command.kind).toBe("http");
 		expect(

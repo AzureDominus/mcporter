@@ -1,10 +1,4 @@
-export type {
-	CommandSpec,
-	ConfigSourceDefinition,
-	ConfigSourceKind,
-	MergeStrategy,
-	ServerDefinition,
-} from "./config.js";
+export type { CommandSpec, ServerDefinition } from "./config.js";
 export { loadServerDefinitions } from "./config.js";
 export type { CallResult } from "./result-utils.js";
 export { createCallResult } from "./result-utils.js";

@@ -7,7 +7,7 @@ A modern TypeScript runtime and CLI for the [Model Context Protocol (MCP)](https
 - **Zero-config CLI** – `npx mcp-runtime list` and `npx mcp-runtime call` get you from install to tool execution quickly, with niceties such as `--tail-log`.
 - **Composable runtime API** – `createRuntime()` pools connections, handles retries, and exposes a typed interface for Bun/Node agents.
 - **OAuth support** – automatic browser launches, local callback server, and token persistence under `~/.mcp-runtime/<server>/` (compatible with existing `token_cache_dir` overrides).
-- **Structured configuration** – loads `config/mcp_servers.json` entries, expanding `${ENV}` placeholders, stdio wrappers, and headers in a predictable way.
+- **Structured configuration** – reads `config/mcp-runtime.json` (Cursor/Claude-compatible) and expands `${ENV}` placeholders, stdio wrappers, and headers in a predictable way.
 - **Integration-ready** – ships with unit and integration tests (including a streamable HTTP fixture) plus GitHub Actions CI, so changes remain trustworthy.
 
 ## Installation
@@ -25,7 +25,7 @@ npm install mcp-runtime
 ```ts
 import { createRuntime } from "mcp-runtime";
 
-const runtime = await createRuntime({ configPath: "./config/mcp_servers.json" });
+const runtime = await createRuntime({ configPath: "./config/mcp-runtime.json" });
 
 const tools = await runtime.listTools("chrome-devtools");
 const screenshot = await runtime.callTool("chrome-devtools", "take_screenshot", {
@@ -52,36 +52,9 @@ const result = await callOnce({
   server: "firecrawl",
   toolName: "crawl",
   args: { url: "https://anthropic.com" },
-  configPath: "./config/mcp_servers.json",
+  configPath: "./config/mcp-runtime.json",
 });
 ```
-
-## Configuration Sources
-
-`mcp-runtime` automatically merges server definitions from multiple tools so your CLI, local IDEs, and agents stay in sync. The default priority is:
-
-1. `config/mcp_servers.json` in your project
-2. Project-scoped `.mcp.json` (Claude Code)
-3. Project-scoped `.cursor/mcp.json`
-4. Project-scoped `.claude/mcp.json`
-5. Claude Desktop config (`claude_desktop_config.json`)
-6. Cursor user config (`~/.cursor/mcp.json` or OS equivalent)
-7. Codex `~/.codex/config.toml`
-
-Sources earlier in the list win conflicts. Create `config/mcp_sources.json` to customize the order or add additional files:
-
-```json
-{
-  "strategy": "last-wins",
-  "sources": [
-    { "kind": "codex" },
-    { "kind": "cursor-user" },
-    { "kind": "local-json", "path": "./config/mcp_servers.json" }
-  ]
-}
-```
-
-Supported `kind` values are `local-json`, `project-mcp-json`, `cursor-project`, `cursor-user`, `claude-project`, `claude-user`, `claude-desktop`, and `codex`. Every entry may override `path` and set `optional: false` when a file must exist. Combine this with environment-variable headers (for example `CONTEXT7_API_KEY`) to keep secrets out of source control while still allowing IDE-specific configs to extend the same runtime.
 
 ## CLI Reference
 
@@ -106,7 +79,7 @@ Common flags:
 
 | Flag | Description |
 | --- | --- |
-| `--config <path>` | Path to `mcp_servers.json` (defaults to `./config/mcp_servers.json`). |
+| `--config <path>` | Path to `mcp-runtime.json` (defaults to `./config/mcp-runtime.json`). |
 | `--root <path>` | Working directory for stdio commands (so `scripts/*` resolve correctly). |
 | `--tail-log` | After the tool completes, print the last 20 lines of any referenced log file. |
 
@@ -150,7 +123,7 @@ const mcpRuntime = await createRuntime({
 		},
 	],
 });
-// Inline definitions work at runtime; move this block to config/mcp_servers.json if you prefer static config.
+// Inline definitions work at runtime; move this block to config/mcp-runtime.json if you prefer static config.
 
 const context7 = createServerProxy(mcpRuntime, "context7");
 
@@ -209,34 +182,36 @@ console.log(docs.markdown());
 
 The return value is still a `CallResult`, so you retain `.text()`, `.markdown()`, `.json()`, and friends.
 
-## Configuration sources
+## Configuration
 
-`createRuntime()` automatically merges MCP definitions from several tools (first match wins by default):
-
-1. `config/mcp_servers.json`
-2. Project `.mcp.json`
-3. Project `.cursor/mcp.json`
-4. Project `.claude/mcp.json`
-5. Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%/Claude/claude_desktop_config.json` on Windows).
-6. Cursor user config (`~/.cursor/mcp.json` on macOS/Linux, `%APPDATA%/Cursor/mcp.json` on Windows).
-7. Claude Code global config (`~/.claude.json`; legacy installs sometimes use `~/.claude/mcp.json`).
-8. Codex CLI config (`~/.codex/config.toml`).
-
-Add `config/mcp_sources.json` to change the order or switch to “last source wins” merging:
+Define your servers in `config/mcp-runtime.json` using the same shape Cursor and Claude Code expect:
 
 ```jsonc
 {
-	"strategy": "last-wins",
-	"sources": [
-		{ "kind": "local-json" },                 // config/mcp_servers.json
-		{ "kind": "project-mcp-json", "optional": true },
-		{ "kind": "cursor-project", "optional": true },
-		{ "kind": "codex", "optional": true }
-	]
+	"mcpServers": {
+		"context7": {
+			"description": "Context7 docs MCP",
+			"baseUrl": "https://mcp.context7.com/mcp",
+			"headers": {
+				"Authorization": "$env:CONTEXT7_API_KEY"
+			}
+		},
+		"chrome-devtools": {
+			"command": "bash",
+			"args": ["scripts/mcp_stdio_wrapper.sh", "env", "npx", "-y", "chrome-devtools-mcp@latest"]
+		}
+	}
 }
 ```
 
-Every source accepts an optional `path` if you keep configs elsewhere (use `~` for home expansion). Prefer declarative configuration, but you can also pass `configSources` / `strategy` directly to `createRuntime()` when you need per-script overrides.
+Fields you can use:
+
+- `baseUrl` for HTTP/SSE servers.
+- `command` + optional `args` for stdio servers.
+- Optional metadata such as `description`, `headers`, `env`, `auth`, `tokenCacheDir`, and `clientName`.
+- Convenience helpers `bearerToken` or `bearerTokenEnv` populate `Authorization` headers automatically.
+
+Pass a different path via `createRuntime({ configPath })` when you need multiple configs side by side.
 
 ## Testing & CI
 
