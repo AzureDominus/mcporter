@@ -721,6 +721,9 @@ export async function handleCall(runtime: Awaited<ReturnType<typeof createRuntim
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
       const timeoutDisplay = `${timeoutMs}ms`;
+      await runtime
+        .close(server)
+        .catch(() => {});
       throw new Error(
         `Call to ${server}.${tool} timed out after ${timeoutDisplay}. Override MCPORTER_CALL_TIMEOUT or pass --timeout to adjust.`
       );

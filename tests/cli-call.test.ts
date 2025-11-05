@@ -55,16 +55,19 @@ describe('CLI call argument parsing', () => {
     vi.useFakeTimers();
     try {
       const { handleCall } = await cliModulePromise;
+      const close = vi.fn().mockResolvedValue(undefined);
       const runtime = {
         callTool: () =>
           new Promise((resolve) => {
             setTimeout(() => resolve('done'), 1000);
           }),
+        close,
       };
       const promise = handleCall(runtime as never, ['chrome-devtools.list_pages', '--timeout', '10']);
       const expectation = expect(promise).rejects.toThrow('Call to chrome-devtools.list_pages timed out after 10ms.');
       await vi.runOnlyPendingTimersAsync();
       await expectation;
+      expect(close).toHaveBeenCalledWith('chrome-devtools');
     } finally {
       vi.useRealTimers();
     }
