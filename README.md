@@ -96,7 +96,7 @@ To reset credentials, delete that directory and rerun the command—`mcporter` w
 
 ### Generate Standalone CLIs
 
-`mcporter` can mint a fully standalone CLI for any server—handy when you want a single-purpose tool with friendly flags. You do **not** need an on-disk config; provide `--name` and `--command` (or fall back to `--server '{...}'` for advanced options):
+`mcporter` can mint a fully standalone CLI for any server—handy when you want a single-purpose tool with friendly flags. You do **not** need an on-disk config; provide `--command` (optionally `--name`) or fall back to `--server '{...}'` for advanced options:
 
 Generate a single executable you can ship to agents or drop on a PATH:
 
@@ -110,6 +110,8 @@ chmod +x context7
 ```
 
 Pass `--description` if you want a friendly summary in the generated help, or fall back to `--server '{...}'` when you need headers, env vars, or stdio commands.
+
+If you omit `--name`, mcporter infers one from the command URL (for example, `https://mcp.context7.com/mcp` becomes `context7`).
 
 The command writes `context7.ts` alongside a compiled `context7` binary. Generated CLIs embed the discovered schemas, so subsequent executions skip `listTools` round-trips and hit the network only for real tool calls. Use `--bundle` without a value to auto-name the output, and pass `--timeout` to raise the per-call default (30s). Add `--minify` to shrink bundled output. Compilation currently requires Bun; `--compile [path]` runs `bun build --compile` to emit a native executable, and when you omit the path the binary inherits the server name (`context7` in the example) so you can drop it straight onto your PATH.
 

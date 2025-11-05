@@ -213,18 +213,21 @@ async function handleGenerateCli(
 	globalFlags: FlagMap,
 ): Promise<void> {
 	const parsed = parseGenerateFlags(args);
+	const inferredName =
+		parsed.name ??
+		(parsed.command ? inferNameFromCommand(parsed.command) : undefined);
 	const serverRef =
 		parsed.server ??
-		(parsed.name && parsed.command
+		(parsed.command && inferredName
 			? JSON.stringify({
-					name: parsed.name,
+					name: inferredName,
 					command: parsed.command,
 					...(parsed.description ? { description: parsed.description } : {}),
 				})
 			: undefined);
 	if (!serverRef) {
 		throw new Error(
-			"Provide --server with a definition or supply --name and --command.",
+			"Provide --server with a definition or a command we can infer a name from (use --name to override).",
 		);
 	}
 	const { outputPath, bundlePath, compilePath } = await generateCli({
@@ -248,6 +251,66 @@ async function handleGenerateCli(
 }
 
 // handleList prints configured servers and optional tool metadata.
+function inferNameFromCommand(command: string): string | undefined {
+	const trimmed = command.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+	try {
+		const url = new URL(trimmed);
+		const genericHosts = new Set([
+			"www",
+			"api",
+			"mcp",
+			"service",
+			"services",
+			"app",
+			"localhost",
+		]);
+		const knownTlds = new Set([
+			"com",
+			"net",
+			"org",
+			"io",
+			"ai",
+			"app",
+			"dev",
+			"co",
+			"cloud",
+		]);
+		const parts = url.hostname.split(".").filter(Boolean);
+		const filtered = parts.filter((part) => {
+			const lower = part.toLowerCase();
+			if (genericHosts.has(lower)) {
+				return false;
+			}
+			if (knownTlds.has(lower)) {
+				return false;
+			}
+			if (/^\d+$/.test(part)) {
+				return false;
+			}
+			return true;
+		});
+		if (filtered.length > 0) {
+			const last = filtered[filtered.length - 1];
+			if (last) {
+				return last;
+			}
+		}
+		const segments = url.pathname.split("/").filter(Boolean);
+		const firstSegment = segments[0];
+		if (firstSegment) {
+			return firstSegment.replace(/[^a-zA-Z0-9-_]/g, "-");
+		}
+	} catch {
+		// not a URL; fall through to filesystem heuristics
+	}
+	const firstToken = trimmed.split(/\s+/)[0] ?? trimmed;
+	const candidate = firstToken.split(/[\\/]/).pop() ?? firstToken;
+	return candidate.replace(/\.[a-z0-9]+$/i, "");
+}
+
 async function handleList(
 	runtime: Awaited<ReturnType<typeof createRuntime>>,
 	args: string[],

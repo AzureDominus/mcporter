@@ -234,6 +234,8 @@ describe("generateCli", () => {
 		};
 		expect(Object.keys(cacheData.tools)).toContain("add");
 
+		const derivedUrl = new URL(baseUrl.toString());
+		derivedUrl.hostname = "integration.localhost";
 		const altOutput = path.join(tmpDir, "integration-alt.ts");
 		await new Promise<void>((resolve, reject) => {
 			exec.execFile(
@@ -241,10 +243,8 @@ describe("generateCli", () => {
 				[
 					"dist/cli.js",
 					"generate-cli",
-					"--name",
-					"integration-alt",
 					"--command",
-					baseUrl.toString(),
+					derivedUrl.toString(),
 					"--output",
 					altOutput,
 				],
@@ -259,7 +259,7 @@ describe("generateCli", () => {
 			);
 		});
 		const altContent = await fs.readFile(altOutput, "utf8");
-		expect(altContent).toContain("integration-alt");
+		expect(altContent).toContain('const embeddedName = "integration"');
 
 		// --raw path exercised implicitly by runtime when needed; end-to-end call
 		// verification is covered in runtime integration tests.
