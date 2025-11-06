@@ -153,7 +153,7 @@ export async function handleList(
   const descriptionText = definition.description ?? '<none>';
   const trailingSummary = `${descriptionText}${transportSummary ? ` [${transportSummary}]` : ''}`;
   const headerLabel = boldText(target);
-  console.log(`${headerLabel} ${dimText(`- ${trailingSummary}`)}`);
+  console.log(`${headerLabel} ${extraDimText(`- ${trailingSummary}`)}`);
   console.log('');
   if (sourcePath) {
     console.log(`  Source: ${sourcePath}`);
