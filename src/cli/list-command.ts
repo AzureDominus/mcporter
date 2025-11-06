@@ -204,7 +204,7 @@ function printToolDetail(
 ): string | undefined {
   const options = extractOptions(tool as ServerToolInfo);
   const visibleOptions = requiredOnly ? options.filter((entry) => entry.required) : options;
-  const lines = formatToolSignatureBlock(tool.name, tool.description ?? '', visibleOptions, options.length, requiredOnly);
+  const lines = formatToolSignatureBlock(tool.name, tool.description ?? '', visibleOptions, options, requiredOnly);
   for (const line of lines) {
     console.log(`  ${line}`);
   }
@@ -220,35 +220,40 @@ function printToolDetail(
 function formatToolSignatureBlock(
   name: string,
   description: string,
-  options: GeneratedOption[],
-  totalOptionCount: number,
+  visibleOptions: GeneratedOption[],
+  allOptions: GeneratedOption[],
   requiredOnly: boolean
 ): string[] {
   const lines: string[] = [];
   if (description) {
     lines.push(extraDimText(`// ${description}`));
   }
-  if (options.length === 0) {
-    if (totalOptionCount > 0 && requiredOnly) {
-      lines.push(`${cyanText(name)}({})`);
-    } else {
-      lines.push(`${cyanText(name)}()`);
-    }
-    if (requiredOnly && totalOptionCount > 0) {
-      lines.push(dimText(`// ${totalOptionCount} optional parameter${totalOptionCount === 1 ? '' : 's'} omitted`));
-    }
+  const optionalNote = formatOptionalNote(requiredOnly ? allOptions.filter((entry) => !entry.required) : []);
+  if (visibleOptions.length === 0) {
+    const signature = requiredOnly && allOptions.length > 0 ? `${cyanText(name)}({})` : `${cyanText(name)}()`;
+    lines.push(optionalNote ? `${signature} ${optionalNote}` : signature);
     return lines;
   }
   lines.push(`${cyanText(name)}({`);
-  for (const option of options) {
+  for (const option of visibleOptions) {
     lines.push(`  ${formatParameterSignature(option)}`);
   }
-  lines.push('})');
-  if (requiredOnly && totalOptionCount > options.length) {
-    const omitted = totalOptionCount - options.length;
-    lines.push(dimText(`// ${omitted} optional parameter${omitted === 1 ? '' : 's'} omitted`));
-  }
+  const closing = optionalNote ? `}) ${optionalNote}` : '})';
+  lines.push(closing);
   return lines;
+}
+
+function formatOptionalNote(omittedOptions: GeneratedOption[]): string | undefined {
+  if (omittedOptions.length === 0) {
+    return undefined;
+  }
+  const names = omittedOptions.map((option) => option.property);
+  const limit = 3;
+  const visibleNames = names.slice(0, limit);
+  if (names.length > limit) {
+    visibleNames.push('…');
+  }
+  return extraDimText(`// optional: ${visibleNames.join(', ')}`);
 }
 
 function formatParameterSignature(option: GeneratedOption): string {

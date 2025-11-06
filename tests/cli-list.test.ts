@@ -230,7 +230,7 @@ describe('CLI list classification', () => {
     expect(lines.some((line) => line.includes('a: number') && line.includes('First operand'))).toBe(true);
     expect(lines.some((line) => line.includes('format?:'))).toBe(false);
     expect(lines.some((line) => line.includes('dueBefore?:'))).toBe(false);
-    expect(lines.some((line) => line.includes('optional parameters omitted'))).toBe(true);
+    expect(lines.some((line) => line.includes('// optional: format, dueBefore'))).toBe(true);
     expect(lines.some((line) => line.includes('mcporter call calculator.add(a: 1)'))).toBe(true);
     expect(listToolsSpy).toHaveBeenCalledWith('calculator', { includeSchema: true });
 
