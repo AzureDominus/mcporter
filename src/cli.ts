@@ -780,8 +780,8 @@ export async function handleList(runtime: Awaited<ReturnType<typeof createRuntim
           console.log(rendered.line);
           const remaining = servers.length - completedCount;
           if (remaining > 0) {
-            const latestSummary = truncateForSpinner(`${result.server.name} — ${rendered.summary}`);
-            spinner.text = `Listing servers… ${completedCount}/${servers.length} · latest: ${latestSummary}`;
+            // Keep the spinner focused on progress instead of replaying the last completed server.
+            spinner.text = `Listing servers… ${completedCount}/${servers.length} · remaining: ${remaining}`;
             spinner.start();
           }
         } else {
@@ -1155,10 +1155,26 @@ function classifyListError(
   }
 
   const rawMessage =
-    error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : JSON.stringify(error) ?? '';
   const normalized = rawMessage.toLowerCase();
+  // Pull out HTTP status codes that appear in the structured SDK errors (e.g., "status code (401)").
+  const statusMatch = rawMessage.match(/status code\s*\((\d{3})\)/i);
+  // Guard optional capture groups before parsing so TypeScript stays happy under --strictNullChecks.
+  const statusCodeText = statusMatch?.[1];
+  const statusCode = statusCodeText ? Number.parseInt(statusCodeText, 10) : undefined;
+  const authStatuses = new Set([401, 403, 405]);
 
-  if (normalized.includes('401') || normalized.includes('unauthorized') || normalized.includes('invalid_token')) {
+  if (
+    authStatuses.has(statusCode ?? -1) ||
+    normalized.includes('401') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('invalid_token') ||
+    normalized.includes('forbidden')
+  ) {
     const note = yellowText(`auth required — run 'mcporter auth ${serverName}'`);
     return { colored: note, summary: 'auth required', category: 'auth', authCommand: `mcporter auth ${serverName}` };
   }
@@ -1166,11 +1182,17 @@ function classifyListError(
   if (
     normalized.includes('fetch failed') ||
     normalized.includes('econnrefused') ||
+    normalized.includes('connection refused') ||
+    normalized.includes('connection closed') ||
+    normalized.includes('connection reset') ||
+    normalized.includes('socket hang up') ||
     normalized.includes('connect timeout') ||
+    normalized.includes('network is unreachable') ||
     normalized.includes('timed out') ||
     normalized.includes('timeout') ||
     normalized.includes('timeout after')
   ) {
+    // Treat transport-layer disconnects as offline so the summary stays actionable instead of echoing low-level errors.
     const note = redText(`offline — unable to reach server`);
     return { colored: note, summary: 'offline', category: 'offline' };
   }
