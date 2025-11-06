@@ -136,8 +136,8 @@ describe('CLI list classification', () => {
             ? {
                 type: 'object',
                 properties: {
-                  a: { type: 'number' },
-                  format: { type: 'string', enum: ['json', 'markdown'] },
+                  a: { type: 'number', description: 'First operand' },
+                  format: { type: 'string', enum: ['json', 'markdown'], description: 'Output serialization format' },
                   dueBefore: { type: 'string', format: 'date-time', description: 'ISO 8601 timestamp' },
                 },
                 required: ['a'],
@@ -155,21 +155,29 @@ describe('CLI list classification', () => {
       listTools: listToolsSpy,
     } as unknown as Awaited<ReturnType<typeof import('../src/runtime.js')['createRuntime']>>;
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    await handleList(runtime, ['calculator']);
+  await handleList(runtime, ['calculator']);
 
-    const logLines = logSpy.mock.calls.map((call) => call.join(' '));
-    expect(logLines.some((line) => line.includes('calculator'))).toBe(true);
-    expect(
-      logLines.some((line) => line.includes('calculator - Test integration server [HTTP https://example.com/mcp]'))
-    ).toBe(true);
-    expect(logLines.some((line) => line.includes('add('))).toBe(true);
-    expect(logLines.some((line) => line.includes('Alt: mcporter call calculator.add('))).toBe(true);
-    expect(logLines.some((line) => line.includes('dueBefore?:') && line.includes('ISO 8601'))).toBe(true);
-    expect(logLines.some((line) => line.includes('Usage: mcporter call calculator.add --a <a:number>'))).toBe(true);
-    expect(listToolsSpy).toHaveBeenCalledWith('calculator', { includeSchema: true });
+  const stripAnsi = (value: string) => value.replace(/\x1B\[[0-9;]*m/g, '');
+  const rawLines = logSpy.mock.calls.map((call) => call.join(' '));
+  const lines = rawLines.map(stripAnsi);
 
-    logSpy.mockRestore();
-  });
+  expect(lines.some((line) => line.includes('calculator'))).toBe(true);
+  expect(lines.some((line) => line.includes('calculator - Test integration server [HTTP https://example.com/mcp]'))).toBe(
+    true
+  );
+  expect(lines.some((line) => line.includes('// Add two numbers'))).toBe(true);
+  expect(lines.some((line) => line.includes('add({'))).toBe(true);
+  expect(lines.some((line) => line.includes('a: number') && line.includes('First operand'))).toBe(true);
+  expect(
+    lines.some((line) => line.includes('format?: "json" | "markdown"') && line.includes('Output serialization format'))
+  ).toBe(true);
+  expect(lines.some((line) => line.includes('dueBefore?: string') && line.includes('ISO 8601'))).toBe(true);
+  expect(lines.some((line) => line.includes('Examples:'))).toBe(true);
+  expect(lines.some((line) => line.includes('mcporter call calculator.add('))).toBe(true);
+  expect(listToolsSpy).toHaveBeenCalledWith('calculator', { includeSchema: true });
+
+  logSpy.mockRestore();
+});
 });

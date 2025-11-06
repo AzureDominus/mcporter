@@ -157,8 +157,20 @@ export async function handleList(
       console.log('  Tools: <none>');
       return;
     }
+    const examples: string[] = [];
     for (const tool of tools) {
-      printToolDetail(target, tool, Boolean(flags.schema));
+      const example = printToolDetail(target, tool, Boolean(flags.schema));
+      if (example) {
+        examples.push(example);
+      }
+    }
+    const uniqueExamples = Array.from(new Set(examples)).filter(Boolean).slice(0, 3);
+    if (uniqueExamples.length > 0) {
+      console.log(`  ${dimText('Examples:')}`);
+      for (const example of uniqueExamples) {
+        console.log(`    ${example}`);
+      }
+      console.log('');
     }
     return;
   } catch (error) {
@@ -180,47 +192,43 @@ function printToolDetail(
   serverName: string,
   tool: { name: string; description?: string; inputSchema?: unknown },
   includeSchema: boolean
-): void {
+): string | undefined {
   const options = extractOptions(tool as ServerToolInfo);
-  const header = formatToolSignature(tool.name, tool.description ?? '', options);
-  console.log(`  ${header}`);
-
-  const altExample = formatCallExpressionExample(serverName, tool.name, options);
-  if (altExample) {
-    console.log(`    ${dimText('Alt:')} ${altExample}`);
+  const lines = formatToolSignatureBlock(tool.name, tool.description ?? '', options);
+  for (const line of lines) {
+    console.log(`  ${line}`);
   }
-
-  const usageParts = [`mcporter call ${serverName}.${tool.name}`];
-  for (const option of options.filter((entry) => entry.required)) {
-    usageParts.push(`--${option.cliName} ${option.placeholder}`);
-  }
-  console.log(`    ${dimText('Usage:')} ${usageParts.join(' ')}`);
 
   if (includeSchema && tool.inputSchema) {
     // Schemas can be large — indenting keeps multi-line JSON legible without disrupting surrounding output.
     console.log(indent(JSON.stringify(tool.inputSchema, null, 2), '      '));
   }
   console.log('');
+  return formatCallExpressionExample(serverName, tool.name, options);
 }
 
-function formatToolSignature(name: string, description: string, options: GeneratedOption[]): string {
-  const parameters = formatParameterSignatureList(options);
-  const descriptionSuffix = description ? ` — ${description}` : '';
-  return `${cyanText(name)}${parameters}${descriptionSuffix}`;
-}
-
-function formatParameterSignatureList(options: GeneratedOption[]): string {
-  if (options.length === 0) {
-    return '()';
+function formatToolSignatureBlock(name: string, description: string, options: GeneratedOption[]): string[] {
+  const lines: string[] = [];
+  if (description) {
+    lines.push(dimText(`// ${description}`));
   }
-  const segments = options.map((option) => formatParameterSignature(option));
-  return `(${segments.join(', ')})`;
+  if (options.length === 0) {
+    lines.push(`${cyanText(name)}()`);
+    return lines;
+  }
+  lines.push(`${cyanText(name)}({`);
+  for (const option of options) {
+    lines.push(`  ${formatParameterSignature(option)}`);
+  }
+  lines.push('})');
+  return lines;
 }
 
 function formatParameterSignature(option: GeneratedOption): string {
   const typeAnnotation = formatTypeAnnotation(option);
   const optionalSuffix = option.required ? '' : '?';
-  return `${option.property}${optionalSuffix}: ${typeAnnotation}`;
+  const commentSuffix = option.description ? `  // ${option.description}` : '';
+  return `${option.property}${optionalSuffix}: ${typeAnnotation}${commentSuffix}`;
 }
 
 function formatTypeAnnotation(option: GeneratedOption): string {
