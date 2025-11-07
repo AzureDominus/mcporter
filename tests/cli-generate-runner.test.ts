@@ -79,6 +79,21 @@ describe('generate-cli runner internals', () => {
     expect(spec.args).toEqual(['-y', 'chrome-devtools-mcp@latest']);
   });
 
+  it('keeps bare names positional when no whitespace is present', () => {
+    const args = ['linear'];
+    const parsed = generateInternals.parseGenerateFlags([...args]);
+    expect(parsed.server).toBe('linear');
+    expect(parsed.command).toBeUndefined();
+  });
+
+  it('handles inline commands with extra interior whitespace', () => {
+    const args = ['  bun   run   ./cli.ts   --stdio  '];
+    const parsed = generateInternals.parseGenerateFlags([...args]);
+    const spec = parsed.command as { command: string; args?: string[] };
+    expect(spec.command).toBe('bun');
+    expect(spec.args).toEqual(['run', './cli.ts', '--stdio']);
+  });
+
   it('builds regenerate commands honoring global flags and invocation overrides', () => {
     const definition: SerializedServerDefinition = {
       name: 'demo',
