@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CliArtifactMetadata } from '../../cli-metadata.js';
 import type { ServerDefinition } from '../../config.js';
+import { MCPORTER_VERSION } from '../../runtime.js';
 import { buildToolDoc, type ToolOptionDoc } from '../list-detail-helpers.js';
 import type { GeneratedOption, ToolMetadata } from './tools.js';
 import { buildEmbeddedSchemaMap } from './tools.js';
@@ -43,7 +44,7 @@ export async function readPackageMetadata(): Promise<{ name: string; version: st
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       throw error;
     }
-    return { name: 'mcporter', version: '0.0.0' };
+    return { name: 'mcporter', version: MCPORTER_VERSION };
   }
 }
 
