@@ -12,7 +12,8 @@ const packageRoot = fileURLToPath(new URL('../../..', import.meta.url));
 // Generated CLIs import commander/mcporter, but end-users run mcporter from directories
 // that often lack node_modules. Pre-resolve those deps to this package so bundling works
 // even in empty temp dirs (fixes #1).
-const dependencyAliasPlugin = createLocalDependencyAliasPlugin(['commander', 'mcporter']);
+const BUNDLED_DEPENDENCIES = ['commander', 'mcporter'] as const;
+const dependencyAliasPlugin = createLocalDependencyAliasPlugin([...BUNDLED_DEPENDENCIES]);
 
 export async function bundleOutput({
   sourcePath,
@@ -101,16 +102,7 @@ async function bundleWithBun({
   // Copy the template into the package tree so Bun sees our node_modules deps even when the
   // CLI runs from an empty working directory.
   await fs.copyFile(sourcePath, stagingEntry);
-  const nodeModulesPath = path.join(packageRoot, 'node_modules');
-  const stagingNodeModules = path.join(stagingDir, 'node_modules');
-  try {
-    const stats = await fs.stat(nodeModulesPath);
-    if (stats.isDirectory()) {
-      await fs.symlink(nodeModulesPath, stagingNodeModules);
-    }
-  } catch {
-    // Ignore if we cannot create the link; Bun will still attempt to resolve via cwd.
-  }
+  await ensureBundlerDeps(stagingDir);
   try {
     const args = ['build', stagingEntry, '--outfile', absTarget, '--target', runtimeKind === 'bun' ? 'bun' : 'node'];
     if (minify) {
@@ -230,7 +222,53 @@ function resolveLocalDependency(specifier: string): string | undefined {
         }
       }
     }
+  }
+  return undefined;
+}
+
+async function ensureBundlerDeps(stagingDir: string): Promise<void> {
+  const nodeModulesDir = path.join(stagingDir, 'node_modules');
+  await fs.mkdir(nodeModulesDir, { recursive: true });
+  await Promise.all(
+    BUNDLED_DEPENDENCIES.map(async (specifier) => {
+      const sourceDir = resolveDependencyDirectory(specifier);
+      if (!sourceDir) {
+        return;
+      }
+      const target = path.join(nodeModulesDir, specifier);
+      await linkOrCopyDependency(sourceDir, target);
+    })
+  );
+}
+
+function resolveDependencyDirectory(specifier: (typeof BUNDLED_DEPENDENCIES)[number]): string | undefined {
+  try {
+    if (specifier === 'mcporter') {
+      return packageRoot;
+    }
+    const pkgPath = localRequire.resolve(path.join(specifier, 'package.json'));
+    return path.dirname(pkgPath);
+  } catch {
     return undefined;
+  }
+}
+
+async function linkOrCopyDependency(sourceDir: string, targetDir: string): Promise<void> {
+  try {
+    await fs.symlink(sourceDir, targetDir, 'dir');
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      return;
+    }
+    if (code === 'ENOENT') {
+      return;
+    }
+    if (code === 'EPERM' || code === 'EACCES') {
+      await fs.cp(sourceDir, targetDir, { recursive: true });
+      return;
+    }
+    throw error;
   }
 }
 
