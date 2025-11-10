@@ -7,6 +7,11 @@ import { type ParseError, parse as parseJsonWithComments, printParseErrorCode } 
 import type { ImportKind, RawEntry } from './config-schema.js';
 import { RawEntrySchema } from './config-schema.js';
 
+interface ReadExternalEntryOptions {
+  readonly projectRoot?: string;
+  readonly importKind?: ImportKind;
+}
+
 export function pathsForImport(kind: ImportKind, rootDir: string): string[] {
   switch (kind) {
     case 'cursor':
@@ -42,7 +47,7 @@ export function pathsForImport(kind: ImportKind, rootDir: string): string[] {
 
 export async function readExternalEntries(
   filePath: string,
-  projectRoot?: string
+  options: ReadExternalEntryOptions = {}
 ): Promise<Map<string, RawEntry> | null> {
   if (!(await fileExists(filePath))) {
     return null;
@@ -60,7 +65,7 @@ export async function readExternalEntries(
     }
 
     const parsed = parseJsonBuffer(buffer);
-    return extractFromMcpJson(parsed, projectRoot);
+    return extractFromMcpJson(parsed, options);
   } catch (error) {
     if (shouldIgnoreParseError(error)) {
       return new Map<string, RawEntry>();
@@ -73,23 +78,26 @@ export function toFileUrl(filePath: string): URL {
   return pathToFileURL(filePath);
 }
 
-function extractFromMcpJson(raw: unknown, projectRoot?: string): Map<string, RawEntry> {
+function extractFromMcpJson(raw: unknown, options: ReadExternalEntryOptions): Map<string, RawEntry> {
   const map = new Map<string, RawEntry>();
   if (!isRecord(raw)) {
     return map;
   }
 
+  const { importKind, projectRoot } = options;
+  const descriptor = resolveContainerDescriptor(importKind);
+
   const containers: Record<string, unknown>[] = [];
-  if (isRecord(raw.mcpServers)) {
+  if (descriptor.allowMcpServers && isRecord(raw.mcpServers)) {
     containers.push(raw.mcpServers);
   }
-  if (isRecord(raw.servers)) {
+  if (descriptor.allowServers && isRecord(raw.servers)) {
     containers.push(raw.servers);
   }
-  if (isRecord(raw.mcp)) {
+  if (descriptor.allowMcp && isRecord(raw.mcp)) {
     containers.push(raw.mcp);
   }
-  if (containers.length === 0) {
+  if (descriptor.allowRootFallback && containers.length === 0) {
     containers.push(raw);
   }
 
@@ -242,6 +250,25 @@ function addEntriesFromContainer(container: Record<string, unknown>, target: Map
       target.set(name, entry);
     }
   }
+}
+
+function resolveContainerDescriptor(
+  importKind: ImportKind | undefined
+): { allowMcpServers: boolean; allowServers: boolean; allowMcp: boolean; allowRootFallback: boolean } {
+  if (importKind === 'opencode') {
+    return {
+      allowMcpServers: false,
+      allowServers: false,
+      allowMcp: true,
+      allowRootFallback: false,
+    };
+  }
+  return {
+    allowMcpServers: true,
+    allowServers: true,
+    allowMcp: true,
+    allowRootFallback: true,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

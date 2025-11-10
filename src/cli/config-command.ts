@@ -482,7 +482,7 @@ async function resolveBaseEntry(copyFrom: string | undefined, options: LoadConfi
   const paths = pathsForImport(kind as never, rootDir);
   for (const candidate of paths) {
     const resolved = expandHome(candidate);
-    const entries = await readExternalEntries(resolved, rootDir);
+    const entries = await readExternalEntries(resolved, { projectRoot: rootDir, importKind: kind as never });
     if (!entries) {
       continue;
     }
@@ -583,7 +583,7 @@ async function handleImportCommand(options: ConfigCliOptions, args: string[]): P
   const seenNames = new Set<string>();
   for (const candidate of paths) {
     const resolved = expandHome(candidate);
-    const map = await readExternalEntries(resolved, rootDir);
+    const map = await readExternalEntries(resolved, { projectRoot: rootDir, importKind: kind as never });
     if (!map) {
       continue;
     }

@@ -138,7 +138,7 @@ describe('config import helpers', () => {
       }),
       'utf8'
     );
-    const entries = await readExternalEntries(jsonPath, projectRoot);
+    const entries = await readExternalEntries(jsonPath, { projectRoot });
     expect(entries?.size).toBe(1);
     const repo = entries?.get('repo');
     expect(repo?.command).toBe('node --version');
@@ -161,8 +161,35 @@ describe('config import helpers', () => {
       }),
       'utf8'
     );
-    const entries = await readExternalEntries(jsonPath, path.join(TEMP_DIR, 'workspace'));
+    const entries = await readExternalEntries(jsonPath, { projectRoot: path.join(TEMP_DIR, 'workspace') });
     expect(entries?.size ?? 0).toBe(0);
+  });
+
+  it('parses opencode mcp containers and ignores root-level entries when missing', async () => {
+    await fs.mkdir(TEMP_DIR, { recursive: true });
+    const jsonPath = path.join(TEMP_DIR, 'opencode.jsonc');
+    await fs.writeFile(
+      jsonPath,
+      JSON.stringify({
+        mcp: {
+          demo: {
+            command: 'node',
+            args: ['server.js'],
+          },
+        },
+        stray: {
+          command: 'echo',
+        },
+      }),
+      'utf8'
+    );
+    const entries = await readExternalEntries(jsonPath, { importKind: 'opencode' });
+    expect(entries?.size).toBe(1);
+    expect(entries?.has('demo')).toBe(true);
+
+    await fs.writeFile(jsonPath, JSON.stringify({ demo: { command: 'node' } }), 'utf8');
+    const fallbackEntries = await readExternalEntries(jsonPath, { importKind: 'opencode' });
+    expect(fallbackEntries?.size ?? 0).toBe(0);
   });
 
   it('generates cursor import paths relative to project root and user config dir', () => {
