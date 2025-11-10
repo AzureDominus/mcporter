@@ -47,6 +47,17 @@ describe('loadServerDefinitions when config is optional', () => {
     }
   });
 
+  it('returns an empty list when the config directory exists but the file is missing', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-config-folder-'));
+    try {
+      await fs.mkdir(path.join(tempDir, 'config'), { recursive: true });
+      const servers = await loadServerDefinitions({ rootDir: tempDir });
+      expect(servers).toEqual([]);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
   it('still throws when an explicit config path is missing', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-config-explicit-'));
     const explicitPath = path.join(tempDir, 'does-not-exist.json');

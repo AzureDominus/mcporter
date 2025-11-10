@@ -122,11 +122,14 @@ export function resolveConfigPath(
 }
 
 async function readConfigFile(configPath: string, explicit: boolean): Promise<RawConfig> {
+  if (!explicit && !(await pathExistsAsync(configPath))) {
+    return { mcpServers: {} };
+  }
   try {
     const buffer = await fs.readFile(configPath, 'utf8');
     return RawConfigSchema.parse(JSON.parse(buffer));
   } catch (error) {
-    if (!explicit && isErrno(error, 'ENOENT')) {
+    if (!explicit && (isErrno(error, 'ENOENT') || includesErrnoMessage(error, 'ENOENT'))) {
       return { mcpServers: {} };
     }
     throw error;
@@ -137,9 +140,26 @@ function isErrno(error: unknown, code: string): error is NodeJS.ErrnoException {
   return Boolean(error && typeof error === 'object' && (error as NodeJS.ErrnoException).code === code);
 }
 
+function includesErrnoMessage(error: unknown, code: string): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' && message.includes(code);
+}
+
 function pathExists(filePath: string): boolean {
   try {
     fsSync.accessSync(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pathExistsAsync(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
     return true;
   } catch {
     return false;
