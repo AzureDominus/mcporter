@@ -41,6 +41,18 @@ async function hasBun(): Promise<boolean> {
   });
 }
 
+async function ensureBunSupport(reason: string): Promise<boolean> {
+  if (process.platform === 'win32') {
+    console.warn(`bun not supported on Windows; skipping ${reason}.`);
+    return false;
+  }
+  if (!(await hasBun())) {
+    console.warn(`bun not available on this runner; skipping ${reason}.`);
+    return false;
+  }
+  return true;
+}
+
 describe('mcporter CLI integration', () => {
   let baseUrl: URL;
   let shutdown: (() => Promise<void>) | undefined;
@@ -142,8 +154,7 @@ describe('mcporter CLI integration', () => {
   });
 
   it('bundles with Bun automatically when runtime resolves to Bun', async () => {
-    if (!(await hasBun())) {
-      console.warn('bun not available on this runner; skipping Bun bundler integration test.');
+    if (!(await ensureBunSupport('Bun bundler integration test'))) {
       return;
     }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-bun-bundle-'));
@@ -191,8 +202,7 @@ describe('mcporter CLI integration', () => {
   });
 
   it('runs "node dist/cli.js generate-cli --compile" when bun is available', async () => {
-    if (!(await hasBun())) {
-      console.warn('bun not available on this runner; skipping compile integration test.');
+    if (!(await ensureBunSupport('compile integration test'))) {
       return;
     }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-cli-compile-'));
@@ -242,8 +252,7 @@ describe('mcporter CLI integration', () => {
   });
 
   it('runs "node dist/cli.js generate-cli --compile" using the Bun bundler by default', async () => {
-    if (!(await hasBun())) {
-      console.warn('bun not available on this runner; skipping Bun bundler compile integration test.');
+    if (!(await ensureBunSupport('Bun bundler compile integration test'))) {
       return;
     }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-cli-compile-bun-'));
@@ -292,8 +301,7 @@ describe('mcporter CLI integration', () => {
   });
 
   it('accepts inline stdio commands (e.g., "npx -y chrome-devtools-mcp@latest") when compiling', async () => {
-    if (!(await hasBun())) {
-      console.warn('bun not available on this runner; skipping inline stdio compile integration test.');
+    if (!(await ensureBunSupport('inline stdio compile integration test'))) {
       return;
     }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-inline-stdio-'));
