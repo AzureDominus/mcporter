@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse as parseToml } from '@iarna/toml';
-import { parse as parseJsonWithComments, printParseErrorCode, type ParseError } from 'jsonc-parser';
+import { type ParseError, parse as parseJsonWithComments, printParseErrorCode } from 'jsonc-parser';
 import type { ImportKind, RawEntry } from './config-schema.js';
 import { RawEntrySchema } from './config-schema.js';
 
@@ -335,8 +335,9 @@ function shouldIgnoreParseError(error: unknown): boolean {
 function parseJsonBuffer(buffer: string): unknown {
   const errors: ParseError[] = [];
   const parsed = parseJsonWithComments(buffer, errors, { allowTrailingComma: true, disallowComments: false });
-  if (errors.length > 0) {
-    const { error, offset } = errors[0];
+  const firstError = errors[0];
+  if (firstError) {
+    const { error, offset } = firstError;
     const message = `${printParseErrorCode(error)}${typeof offset === 'number' ? ` at offset ${offset}` : ''}`;
     throw new SyntaxError(message);
   }
