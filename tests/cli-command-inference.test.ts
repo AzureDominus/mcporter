@@ -18,6 +18,11 @@ describe('command inference', () => {
     expect(result).toEqual({ kind: 'command', command: 'list', args: [] });
   });
 
+  it('treats describe as a hidden list alias', () => {
+    const result = inferCommandRouting('describe', ['chrome-devtools'], definitions);
+    expect(result).toEqual({ kind: 'command', command: 'list', args: ['chrome-devtools'] });
+  });
+
   it('auto-corrects close server names', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const result = inferCommandRouting('vercek', [], definitions);

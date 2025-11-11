@@ -16,6 +16,10 @@ export function inferCommandRouting(
     return { kind: 'command', command: token, args };
   }
 
+  if (token === 'describe') {
+    return { kind: 'command', command: 'list', args };
+  }
+
   if (isExplicitCommand(token)) {
     return { kind: 'command', command: token, args };
   }

@@ -162,6 +162,50 @@ describe('CLI call execution behavior', () => {
 
     errorSpy.mockRestore();
   });
+
+  it("falls back to 'list' output when calling a missing help tool", async () => {
+    const listModule = await import('../src/cli/list-command.js');
+    const listSpy = vi.spyOn(listModule, 'handleList').mockResolvedValue(undefined);
+    const { handleCall } = await cliModulePromise;
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const definition: ServerDefinition = {
+      name: 'chrome-devtools',
+      description: 'Chrome DevTools MCP server',
+      command: { kind: 'stdio', command: 'chrome-devtools', args: [], cwd: process.cwd() },
+      source: { kind: 'local', path: '<test>' },
+    };
+    const { runtime, callTool } = createRuntimeStub(
+      {
+        'chrome-devtools': [
+          {
+            name: 'take_snapshot',
+            description: 'Takes a snapshot.',
+            inputSchema: {
+              type: 'object',
+              properties: { url: { type: 'string' } },
+              required: ['url'],
+            },
+          },
+        ],
+      },
+      { definitions: [definition] }
+    );
+
+    try {
+      await handleCall(runtime, ['chrome-devtools.help']);
+      expect(listSpy).toHaveBeenNthCalledWith(1, runtime, ['chrome-devtools']);
+      expect(
+        logSpy.mock.calls.some((call) => call.some((line) => line.includes("does not expose a 'help' tool")))
+      ).toBe(true);
+      logSpy.mockClear();
+      await handleCall(runtime, ['chrome-devtools.help', '--output', 'json']);
+      expect(listSpy).toHaveBeenNthCalledWith(2, runtime, ['chrome-devtools', '--json']);
+      expect(callTool).not.toHaveBeenCalled();
+    } finally {
+      listSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  });
 });
 
 function createRuntimeStub(
@@ -194,6 +238,13 @@ function createRuntimeStub(
   const close = vi.fn().mockResolvedValue(undefined);
   const runtime = {
     getDefinitions: () => [...definitions.values()],
+    getDefinition: vi.fn().mockImplementation((name: string) => {
+      const definition = definitions.get(name);
+      if (!definition) {
+        throw new Error(`Unknown MCP server '${name}'.`);
+      }
+      return definition;
+    }),
     registerDefinition: vi.fn().mockImplementation((definition: ServerDefinition) => {
       definitions.set(definition.name, definition);
     }),

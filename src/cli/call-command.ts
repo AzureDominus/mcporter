@@ -10,6 +10,8 @@ import {
   renderIdentifierResolutionMessages,
 } from './identifier-helpers.js';
 import { buildConnectionIssueEnvelope } from './json-output.js';
+import { handleList } from './list-command.js';
+import type { OutputFormat } from './output-utils.js';
 import { printCallOutput, tailLogIfRequested } from './output-utils.js';
 import { dumpActiveHandles } from './runtime-debug.js';
 import { dimText, redText, yellowText } from './terminal.js';
@@ -82,6 +84,10 @@ export async function handleCall(
     }
   }
 
+  if (await maybeDescribeServer(runtime, server, tool, parsed.output)) {
+    return;
+  }
+
   const timeoutMs = resolveCallTimeout(parsed.timeoutMs);
   const hydratedArgs = await hydratePositionalArguments(runtime, server, tool, parsed.args, parsed.positionalArgs);
   let invocation: { result: unknown; resolvedTool: string };
@@ -103,6 +109,34 @@ export async function handleCall(
   printCallOutput(wrapped, result, parsed.output);
   tailLogIfRequested(result, parsed.tailLog);
   dumpActiveHandles('after call (formatted result)');
+}
+
+async function maybeDescribeServer(
+  runtime: Awaited<ReturnType<typeof import('../runtime.js')['createRuntime']>>,
+  server: string,
+  tool: string,
+  outputFormat: OutputFormat
+): Promise<boolean> {
+  if (tool !== 'help') {
+    return false;
+  }
+  const tools = await runtime
+    .listTools(server, { includeSchema: false, autoAuthorize: false })
+    .catch(() => undefined);
+  if (!tools) {
+    return false;
+  }
+  const hasHelpTool = tools.some((entry) => entry.name === 'help');
+  if (hasHelpTool) {
+    return false;
+  }
+  console.log(dimText(`[mcporter] ${server} does not expose a 'help' tool; showing mcporter list output instead.`));
+  const listArgs = [server];
+  if (outputFormat === 'json') {
+    listArgs.push('--json');
+  }
+  await handleList(runtime, listArgs);
+  return true;
 }
 
 interface ResolveCallTargetOptions {
