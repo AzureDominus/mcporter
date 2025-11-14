@@ -40,11 +40,11 @@ vi.mock('../src/env.js', () => ({
 }));
 
 vi.mock('../src/runtime.js', () => ({
-  createRuntime: (...args: unknown[]) => createRuntimeMock(...args),
+  createRuntime: (...args: Parameters<typeof createRuntimeMock>) => createRuntimeMock(...args),
 }));
 
 vi.mock('../src/lifecycle.js', () => ({
-  isKeepAliveServer: (...args: unknown[]) => isKeepAliveServerMock(...args),
+  isKeepAliveServer: (...args: Parameters<typeof isKeepAliveServerMock>) => isKeepAliveServerMock(...args),
 }));
 
 const { handleDaemonCli } = await import('../src/cli/daemon-command.js');

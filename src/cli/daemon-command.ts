@@ -135,10 +135,14 @@ async function handleDaemonRestart(args: string[], options: DaemonCliOptions, cl
   await client.stop();
   console.log('Daemon stopped (if it was running).');
 
-  const stopped = await waitFor(async () => {
-    const status = await client.status();
-    return status ? null : true;
-  }, 5_000, 100);
+  const stopped = await waitFor(
+    async () => {
+      const status = await client.status();
+      return status ? null : true;
+    },
+    5_000,
+    100
+  );
   if (!stopped) {
     throw new Error('Daemon did not stop before restart could begin.');
   }
