@@ -7,6 +7,7 @@
 
 ### CLI
 - Ad-hoc STDIO invocations that start with `npx -y <package>` now infer the npm package name (stripping versions and ignoring arguments after `--`) instead of producing slugs like `npx-y`, so repeated `mcporter list|call` runs automatically reuse a readable server key without passing `--name`.
+- Quoted inline commands such as `mcporter list "npx -y xcodebuildmcp"` now auto-detect the ad-hoc STDIO transport, so you can skip `--stdio` entirely when probing MCP packages via `npx`.
 
 ## [0.5.7] - 2025-11-14
 

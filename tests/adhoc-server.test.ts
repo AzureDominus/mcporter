@@ -39,4 +39,11 @@ describe('resolveEphemeralServer', () => {
     });
     expect(definition.name).toBe('scope-xcodebuildmcp');
   });
+
+  it('normalizes mixed-case package tokens and --yes flag variants', () => {
+    const { definition } = resolveEphemeralServer({
+      stdioCommand: 'npx --yes XcodeBuildMCP@1.2.3 doctor',
+    });
+    expect(definition.name).toBe('xcodebuildmcp');
+  });
 });
