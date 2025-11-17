@@ -3,7 +3,16 @@ import net from 'node:net';
 import path from 'node:path';
 import { launchDaemonDetached } from './launch.js';
 import { getDaemonMetadataPath, getDaemonSocketPath } from './paths.js';
-import type { CallToolParams, CloseServerParams, DaemonRequest, DaemonRequestMethod, DaemonResponse, ListResourcesParams, ListToolsParams, StatusResult } from './protocol.js';
+import type {
+  CallToolParams,
+  CloseServerParams,
+  DaemonRequest,
+  DaemonRequestMethod,
+  DaemonResponse,
+  ListResourcesParams,
+  ListToolsParams,
+  StatusResult,
+} from './protocol.js';
 
 export interface DaemonClientOptions {
   readonly configPath: string;
