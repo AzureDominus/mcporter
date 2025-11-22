@@ -398,6 +398,14 @@ Set `MCPORTER_CONFIG=~/.mcporter/mcporter.json` in your shell profile when you w
 
 CI runs the same trio via GitHub Actions.
 
+## Related
+- CodexBar 🟦🟩 Keep Codex token windows visible in your macOS menu bar. <https://codexbar.app>.
+- Trimmy ✂️ “Paste once, run once.” Flatten multi-line shell snippets so they paste and run. <https://trimmy.app>.
+- MCP spec ✨ <https://github.com/modelcontextprotocol/specification>
+- Supabase MCP server for Claude 🧠 <https://github.com/supabase-community/supabase-mcp-server>
+- Vercel MCP server for Claude ▲ <https://github.com/vercel/ai/tree/main/packages/ai-sdk-experimental/mcp>
+- `mcp-proxy` for Claude Desktop 🔌 <https://github.com/modelcontextprotocol/claude-code-proxy>
+
 ## Debug Hanging Servers Quickly
 
 Use `tmux` to keep long-running CLI sessions visible while you investigate lingering MCP transports:
@@ -411,13 +419,5 @@ Let it run in the background, then inspect the pane (`tmux capture-pane -pt <ses
 ## License
 
 MIT -- see [LICENSE](LICENSE).
-
-## Related
-- CodexBar 🟦🟩 Keep Codex token windows visible in your macOS menu bar. <https://codexbar.app>.
-- Trimmy ✂️ “Paste once, run once.” Flatten multi-line shell snippets so they paste and run. <https://trimmy.app>.
-- MCP spec ✨ <https://github.com/modelcontextprotocol/specification>
-- Supabase MCP server for Claude 🧠 <https://github.com/supabase-community/supabase-mcp-server>
-- Vercel MCP server for Claude ▲ <https://github.com/vercel/ai/tree/main/packages/ai-sdk-experimental/mcp>
-- `mcp-proxy` for Claude Desktop 🔌 <https://github.com/modelcontextprotocol/claude-code-proxy>
 
 Further reading: [docs/tool-calling.md](docs/tool-calling.md), [docs/call-syntax.md](docs/call-syntax.md), [docs/adhoc.md](docs/adhoc.md), [docs/emit-ts.md](docs/emit-ts.md), [docs/tmux.md](docs/tmux.md).
