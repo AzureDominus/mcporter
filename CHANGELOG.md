@@ -1,11 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+
+## [0.6.3] - 2025-11-22
 ### Runtime & CLI
 - Pinned `@modelcontextprotocol/sdk` to `~1.21.2` because 1.22.0 triggers an MCP internal error (`Cannot read properties of undefined (reading 'typeName')`) when `generate-cli --compile` talks to inline STDIO servers; upstream fix pending.
 
 ### Runtime
 - `listTools` now follows SDK pagination, looping through `nextCursor` so long catalogs return complete tool lists.
+
 ### Configuration
 - Claude imports now preserve root-fallback parsing for legacy `.claude.json` and `.claude/mcp.json` files while treating `.claude/settings*.json` as container-only configs, preventing metadata fields like `statusLine` from being misdetected as MCP servers.
 - Added regression coverage for Claude settings and mcp.json imports to guard the root-fallback behavior.
