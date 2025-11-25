@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 ### CLI
+- Nothing yet.
+
+## [0.6.5] - 2025-11-26
+### CLI
 - `mcporter call|auth|list help/--help` now print the command-specific usage text instead of attempting to run a server, matching the footer’s “mcporter <command> --help” hint.
 - Added a hidden `list-tools` alias for `mcporter list` to preserve older muscle memory and avoid “Unknown MCP server” errors when copied from legacy docs.
 - Ad-hoc HTTP flows now accept `--insecure` as a hidden synonym for `--allow-http`, making plain-HTTP testing flags match common intuition. `--sse` also aliases `--http-url` to keep older examples working.

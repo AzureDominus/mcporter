@@ -2,7 +2,7 @@
 import fsPromises from 'node:fs/promises';
 
 import type { EphemeralServerSpec } from './cli/adhoc-server.js';
-import { handleCall as runHandleCall, printCallHelp } from './cli/call-command.js';
+import { printCallHelp, handleCall as runHandleCall } from './cli/call-command.js';
 import { buildGlobalContext } from './cli/cli-factory.js';
 import { inferCommandRouting } from './cli/command-inference.js';
 import { handleConfigCli } from './cli/config-command.js';
