@@ -1,4 +1,4 @@
-# MCPorter 🧳 - Call MCPs from TypeScript or package them as a CLI
+# MCPorter 🧳 - Call MCPs from TypeScript or as CLI
 <p align="center">
   <img src="https://raw.githubusercontent.com/steipete/mcporter/main/mcporter.png" alt="MCPorter header banner" width="1100">
 </p>
