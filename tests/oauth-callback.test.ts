@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ServerDefinition } from '../src/config.js';
 import { createOAuthSession } from '../src/oauth.js';
@@ -7,6 +10,7 @@ const makeDefinition = (overrides: Partial<ServerDefinition> = {}): ServerDefini
   name: overrides.name ?? 'svc',
   description: 'test',
   command: { kind: 'http', url: new URL('https://example.com/mcp') },
+  tokenCacheDir: overrides.tokenCacheDir ?? path.join(os.tmpdir(), 'mcporter-oauth-test', randomUUID()),
   auth: 'oauth',
   ...overrides,
 });
