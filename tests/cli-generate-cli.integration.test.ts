@@ -17,11 +17,16 @@ const testRequire = createRequire(import.meta.url);
 const MCP_SERVER_MODULE = pathToFileURL(testRequire.resolve('@modelcontextprotocol/sdk/server/mcp.js')).href;
 const STDIO_SERVER_MODULE = pathToFileURL(testRequire.resolve('@modelcontextprotocol/sdk/server/stdio.js')).href;
 const ZOD_MODULE = pathToFileURL(path.join(process.cwd(), 'node_modules', 'zod', 'index.js')).href;
-const PNPM_COMMAND = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const PNPM_COMMAND = process.platform === 'win32' ? 'cmd.exe' : 'pnpm';
+const PNPM_ARGS_PREFIX = process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm'] : [];
+
+function pnpmArgs(args: string[]): string[] {
+  return [...PNPM_ARGS_PREFIX, ...args];
+}
 
 async function ensureDistBuilt(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    execFile(PNPM_COMMAND, ['build'], { cwd: process.cwd(), env: process.env }, (error) => {
+    execFile(PNPM_COMMAND, pnpmArgs(['build']), { cwd: process.cwd(), env: process.env }, (error) => {
       if (error) {
         reject(error);
         return;
