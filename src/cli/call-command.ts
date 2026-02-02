@@ -105,6 +105,10 @@ export async function handleCall(
   }
   const { result } = invocation;
 
+  if (resultIndicatesErrorEnvelope(result)) {
+    process.exitCode = 1;
+  }
+
   const { callResult: wrapped } = wrapCallResult(result);
   printCallOutput(wrapped, result, parsed.output);
   tailLogIfRequested(result, parsed.tailLog);
@@ -424,4 +428,25 @@ function summarizeIssueMessage(message: string): string {
     return trimmed;
   }
   return `${trimmed.slice(0, 117)}…`;
+}
+
+function resultIndicatesErrorEnvelope(result: unknown): boolean {
+  if (!result || typeof result !== 'object') {
+    return false;
+  }
+
+  const top = result as Record<string, unknown>;
+  if (top.isError === true) {
+    return true;
+  }
+
+  const nested = top.raw;
+  if (nested && typeof nested === 'object') {
+    const nestedObj = nested as Record<string, unknown>;
+    if (nestedObj.isError === true) {
+      return true;
+    }
+  }
+
+  return false;
 }
