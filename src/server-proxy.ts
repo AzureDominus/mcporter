@@ -239,11 +239,11 @@ export function createServerProxy(
     }
     const canonicalAlias = canonicalizeToolName(key);
     if (!toolAliasMap.has(canonicalAlias)) {
-      toolAliasMap.set(canonicalAlias, key);
+      toolAliasMap.set(canonicalAlias, canonical);
     }
     const mapperAlias = canonicalizeToolName(canonical);
     if (!toolAliasMap.has(mapperAlias)) {
-      toolAliasMap.set(mapperAlias, key);
+      toolAliasMap.set(mapperAlias, canonical);
     }
     if (cacheSchemas && definitionForCache && isPlainObject(schemaRaw)) {
       persistedSchemas.set(canonical, schemaRaw as Record<string, unknown>);
