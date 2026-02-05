@@ -18,9 +18,10 @@ A quick reference for the primary `mcporter` subcommands. Each command inherits
 - Hidden ad-hoc flag aliases: `--sse` for `--http-url`, `--insecure` for `--allow-http` (for plain HTTP testing).
 - Flags:
   - `--all-parameters` – include every optional parameter in the signature.
-  - `--schema` – pretty-print the JSON schema for each tool.
+  - `--schema` – include JSON schemas in the output (best with `--tool <name>`; for full dumps use `--json --schema` and pipe it).
   - `--tool <name>` – limit output to a single tool.
-  - `--tool-names` – print tool names only (single-server listings only).
+  - `--names-only` – print tool names only (preferred; single-server listings only).
+  - `--tool-names` – alias for `--names-only`.
   - `--timeout <ms>` – per-server timeout when enumerating all servers.
 
 ## `mcporter call <server.tool>`

@@ -41,13 +41,16 @@ npx mcporter call 'linear.create_comment(issueId: "ENG-123", body: "Looks good!"
 
 ```bash
 npx mcporter list
-npx mcporter list context7 --schema
+npx mcporter list linear --names-only
+npx mcporter list linear --tool create_issue --schema
 npx mcporter list https://mcp.linear.app/mcp --all-parameters
 npx mcporter list shadcn.io/api/mcp.getComponents           # URL + tool suffix auto-resolves
 npx mcporter list --stdio "bun run ./local-server.ts" --env TOKEN=xyz
 ```
 
-- Add `--json` to emit a machine-readable summary with per-server statuses (auth/offline/http/error counts) and, for single-server runs, the full tool schema payload.
+- Add `--names-only` to print just tool names (preferred when you only need the menu).
+- Add `--tool <name> --schema` to inspect a single tool's JSON schema.
+- Add `--json` for machine-readable output; use `--json --schema` for full tool+schema dumps (recommended for piping).
 - Add `--verbose` to show every config source that registered the server name (primary first), both in text and JSON list output.
 
 You can now point `mcporter list` at ad-hoc servers: provide a URL directly or use the new `--http-url/--stdio` flags (plus `--env`, `--cwd`, `--name`, or `--persist`) to describe any MCP endpoint. Until you persist that definition, you still need to repeat the same URL/stdio flags for `mcporter call`—the printed slug only becomes reusable once you merge it into a config via `--persist` or `mcporter config add` (use `--scope home|project` to pick the write target). Follow up with `mcporter auth https://…` (or the same flag set) to finish OAuth without editing config. Full details live in [docs/adhoc.md](docs/adhoc.md).
@@ -188,7 +191,7 @@ npx mcporter call --stdio "bun run ./local-server.ts" --name local-tools
 - **Flag shorthand still works.** Prefer CLI-style arguments? Stick with `mcporter linear.create_issue title=value team=value`, `title=value`, `title:value`, or even `title: value`—the CLI now normalizes all three forms.
 - **Cheatsheet.** See [docs/tool-calling.md](docs/tool-calling.md) for a quick comparison of every supported call style (auto-inferred verbs, flags, function-calls, and ad-hoc URLs).
 - **Auto-correct.** If you typo a tool name, MCPorter inspects the server’s tool catalog, retries when the edit distance is tiny, and otherwise prints a `Did you mean …?` hint. The heuristic (and how to tune it) is captured in [docs/call-heuristic.md](docs/call-heuristic.md).
-- **Richer single-server output.** `mcporter list <server>` now prints TypeScript-style signatures, inline comments, return-shape hints, and command examples that mirror the new call syntax. Optional parameters stay hidden by default—add `--all-parameters` or `--schema` whenever you need the full JSON schema.
+- **Richer single-server output.** `mcporter list <server>` prints TypeScript-style signatures, inline comments, return-shape hints, and copy/pasteable examples. Optional parameters stay hidden by default; add `--all-parameters` to include them. For schemas, prefer `mcporter list <server> --tool <name> --schema` (or `--json --schema` when you need a full dump for piping).
 
 
 ## Installation

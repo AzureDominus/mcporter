@@ -268,8 +268,8 @@ function buildCommandSections(colorize: boolean): string[] {
       entries: [
         {
           name: 'list',
-          summary: 'List configured servers (add --schema for tool docs)',
-          usage: 'mcporter list [name] [--schema] [--tool <name>] [--tool-names] [--json]',
+          summary: 'List servers or tools (prefer --names-only; use --tool ... --schema for one schema)',
+          usage: 'mcporter list [name] [--names-only] [--tool <name>] [--schema] [--json]',
         },
         {
           name: 'call',
@@ -369,7 +369,7 @@ function formatQuickStart(colorize: boolean): string {
   const title = colorize ? boldText('Quick start') : 'Quick start';
   const entries = [
     ['mcporter list', 'show configured servers'],
-    ['mcporter list linear --schema', 'view Linear tool docs'],
+    ['mcporter list linear --names-only', 'print tool names (preferred)'],
     ['mcporter call linear.list_issues limit:5', 'invoke a tool with key=value arguments'],
     ['mcporter generate-cli --command https://host/mcp --compile ./my-cli', 'build a standalone CLI/binary'],
   ];

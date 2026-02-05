@@ -127,7 +127,7 @@ export async function handleList(
   target = prepared.target;
 
   if (!target && (flags.toolNamesOnly || flags.toolName)) {
-    console.error('Flags --tool-names/--tool require a server or URL target.');
+    console.error('Flags --names-only/--tool-names/--tool require a server or URL target.');
     process.exitCode = 1;
     return;
   }
@@ -421,20 +421,22 @@ export function printListHelp(): void {
     '  --yes                  Skip confirmation prompts when persisting.',
     '',
     'Display flags:',
-    '  --schema               Show tool schemas when listing servers.',
+    '  --names-only           Print tool names only (preferred; requires a server target).',
+    '  --tool-names           Alias for --names-only.',
+    '  --tool <name>          Limit output to a single tool (pair with --schema for JSON Schema).',
+    '  --schema               Include JSON Schemas (best with --tool; for full dumps use --json --schema).',
     '  --all-parameters       Include optional parameters in tool docs.',
-    '  --tool <name>          Show output for a single tool.',
-    '  --tool-names           Print tool names only (requires a server target).',
-    '  --json                 Emit a JSON summary instead of text.',
+    '  --json                 Emit JSON instead of text (recommended for piping).',
     '  --verbose              Show all config sources for matching servers.',
     '  --sources              Include source arrays in JSON output without other verbose details.',
     '  --timeout <ms>         Override the per-server discovery timeout.',
     '',
     'Examples:',
     '  mcporter list',
-    '  mcporter list linear --schema',
-    '  mcporter list linear --tool create_issue',
-    '  mcporter list linear --tool-names',
+    '  mcporter list linear',
+    '  mcporter list linear --names-only',
+    '  mcporter list linear --tool create_issue --schema',
+    "  mcporter list linear --json --schema | jq '.tools[] | {name, inputSchema}'",
     '  mcporter list https://mcp.example.com/mcp',
     '  mcporter list --http-url https://localhost:3333/mcp --schema',
   ];

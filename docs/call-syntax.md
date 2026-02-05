@@ -62,7 +62,7 @@ Key details:
 
 - Use `--args '{ "issueId": "LNR-123" }'` if you already have JSON payloads—nothing changed for that workflow.
 - The new syntax respects all existing features (timeouts, `--output`, auto-correction).
-- Required fields show by default; pass `--all-parameters` when you want the full parameter list (or `--schema` for raw JSON schemas).
+- Required fields show by default; pass `--all-parameters` when you want the full parameter list. For schemas, prefer `mcporter list <server> --tool <name> --schema` (or `mcporter list <server> --json --schema` when you need a full dump for piping).
 - When in doubt, run `mcporter list <server>` to see the current signature and sample invocation.
 
 ## Flag-Based Syntax Details
