@@ -5,6 +5,8 @@ import { setStdioLogMode } from '../sdk-patches.js';
 import type { EphemeralServerSpec } from './adhoc-server.js';
 import { extractEphemeralServerFlags } from './ephemeral-flags.js';
 import { prepareEphemeralServerTarget } from './ephemeral-target.js';
+import { CliUsageError } from './errors.js';
+import type { ToolMetadata } from './generate/tools.js';
 import { splitHttpToolSelector } from './http-utils.js';
 import { chooseClosestIdentifier, renderIdentifierResolutionMessages } from './identifier-helpers.js';
 import { formatExampleBlock } from './list-detail-helpers.js';
@@ -30,6 +32,8 @@ export function extractListFlags(args: string[]): {
   schema: boolean;
   timeoutMs?: number;
   requiredOnly: boolean;
+  toolNamesOnly: boolean;
+  toolName?: string;
   ephemeral?: EphemeralServerSpec;
   format: ListOutputFormat;
   verbose: boolean;
@@ -38,6 +42,8 @@ export function extractListFlags(args: string[]): {
   let schema = false;
   let timeoutMs: number | undefined;
   let requiredOnly = true;
+  let toolNamesOnly = false;
+  let toolName: string | undefined;
   let verbose = false;
   let includeSources = false;
   const format = consumeOutputFormat(args, {
@@ -64,6 +70,20 @@ export function extractListFlags(args: string[]): {
       args.splice(index, 1);
       continue;
     }
+    if (token === '--tool-names' || token === '--names-only') {
+      toolNamesOnly = true;
+      args.splice(index, 1);
+      continue;
+    }
+    if (token === '--tool') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new CliUsageError("Flag '--tool' requires a tool name.");
+      }
+      toolName = value;
+      args.splice(index, 2);
+      continue;
+    }
     if (token === '--verbose') {
       verbose = true;
       args.splice(index, 1);
@@ -80,7 +100,7 @@ export function extractListFlags(args: string[]): {
     }
     index += 1;
   }
-  return { schema, timeoutMs, requiredOnly, ephemeral, format, verbose, includeSources };
+  return { schema, timeoutMs, requiredOnly, toolNamesOnly, toolName, ephemeral, format, verbose, includeSources };
 }
 
 type ListOutputFormat = 'text' | 'json';
@@ -105,6 +125,12 @@ export async function handleList(
     ephemeral: flags.ephemeral,
   });
   target = prepared.target;
+
+  if (!target && (flags.toolNamesOnly || flags.toolName)) {
+    console.error('Flags --tool-names/--tool require a server or URL target.');
+    process.exitCode = 1;
+    return;
+  }
 
   if (!target) {
     const previousStdioLogMode = setStdioLogMode('silent');
@@ -250,10 +276,27 @@ export async function handleList(
       : undefined;
   const transportSummary = formatTransportSummary(definition);
   const startedAt = Date.now();
+  const includeSchema = !flags.toolNamesOnly;
   if (flags.format === 'json') {
     try {
-      const metadataEntries = await withTimeout(loadToolMetadata(runtime, target, { includeSchema: true }), timeoutMs);
+      const metadataEntries = await withTimeout(loadToolMetadata(runtime, target, { includeSchema }), timeoutMs);
       const durationMs = Date.now() - startedAt;
+      const filteredEntries = resolveToolSelection(flags.toolName, metadataEntries, definition.name);
+      if (!filteredEntries) {
+        process.exitCode = 1;
+        return;
+      }
+      const tools = filteredEntries.map((entry) =>
+        flags.toolNamesOnly
+          ? { name: entry.tool.name }
+          : {
+              name: entry.tool.name,
+              description: entry.tool.description,
+              inputSchema: entry.tool.inputSchema,
+              outputSchema: entry.tool.outputSchema,
+              options: entry.options,
+            }
+      );
       const payload = {
         mode: 'server',
         name: definition.name,
@@ -263,13 +306,7 @@ export async function handleList(
         transport: transportSummary,
         source: definition.source,
         sources: flags.verbose || flags.includeSources ? definition.sources : undefined,
-        tools: metadataEntries.map((entry) => ({
-          name: entry.tool.name,
-          description: entry.tool.description,
-          inputSchema: entry.tool.inputSchema,
-          outputSchema: entry.tool.outputSchema,
-          options: entry.options,
-        })),
+        tools,
       };
       console.log(JSON.stringify(payload, null, 2));
       return;
@@ -296,9 +333,20 @@ export async function handleList(
     }
   }
   try {
-    // Always request schemas so we can render CLI-style parameter hints without re-querying per tool.
-    const metadataEntries = await withTimeout(loadToolMetadata(runtime, target, { includeSchema: true }), timeoutMs);
+    // Request schemas unless we only need tool names.
+    const metadataEntries = await withTimeout(loadToolMetadata(runtime, target, { includeSchema }), timeoutMs);
     const durationMs = Date.now() - startedAt;
+    const filteredEntries = resolveToolSelection(flags.toolName, metadataEntries, definition.name);
+    if (!filteredEntries) {
+      process.exitCode = 1;
+      return;
+    }
+    if (flags.toolNamesOnly) {
+      for (const entry of filteredEntries) {
+        console.log(entry.tool.name);
+      }
+      return;
+    }
     const summaryLine = printSingleServerHeader(
       definition,
       metadataEntries.length,
@@ -309,7 +357,7 @@ export async function handleList(
         printSummaryNow: false,
       }
     );
-    if (metadataEntries.length === 0) {
+    if (filteredEntries.length === 0) {
       console.log('  Tools: <none>');
       console.log(summaryLine);
       console.log('');
@@ -317,7 +365,7 @@ export async function handleList(
     }
     const examples: string[] = [];
     let optionalOmitted = false;
-    for (const entry of metadataEntries) {
+    for (const entry of filteredEntries) {
       const detail = printToolDetail(definition, entry, Boolean(flags.schema), flags.requiredOnly);
       examples.push(...detail.examples);
       optionalOmitted ||= detail.optionalOmitted;
@@ -375,6 +423,8 @@ export function printListHelp(): void {
     'Display flags:',
     '  --schema               Show tool schemas when listing servers.',
     '  --all-parameters       Include optional parameters in tool docs.',
+    '  --tool <name>          Show output for a single tool.',
+    '  --tool-names           Print tool names only (requires a server target).',
     '  --json                 Emit a JSON summary instead of text.',
     '  --verbose              Show all config sources for matching servers.',
     '  --sources              Include source arrays in JSON output without other verbose details.',
@@ -383,6 +433,8 @@ export function printListHelp(): void {
     'Examples:',
     '  mcporter list',
     '  mcporter list linear --schema',
+    '  mcporter list linear --tool create_issue',
+    '  mcporter list linear --tool-names',
     '  mcporter list https://mcp.example.com/mcp',
     '  mcporter list --http-url https://localhost:3333/mcp --schema',
   ];
@@ -420,6 +472,53 @@ function resolveServerDefinition(
     console.error(error.message);
     return undefined;
   }
+}
+
+function resolveToolSelection(
+  toolName: string | undefined,
+  metadataEntries: ToolMetadata[],
+  serverName: string
+): ToolMetadata[] | undefined {
+  if (!toolName) {
+    return metadataEntries;
+  }
+  if (metadataEntries.length === 0) {
+    console.error(`No tools are available on '${serverName}'.`);
+    return undefined;
+  }
+  const resolution = chooseClosestIdentifier(
+    toolName,
+    metadataEntries.map((entry) => entry.tool.name)
+  );
+  const unknownMessage =
+    `Unknown tool '${toolName}' on server '${serverName}'. ` +
+    `Double-check the name or run mcporter list ${serverName}.`;
+  if (!resolution) {
+    console.error(unknownMessage);
+    return undefined;
+  }
+  const messages = renderIdentifierResolutionMessages({
+    entity: 'tool',
+    attempted: toolName,
+    resolution,
+    scope: serverName,
+  });
+  if (resolution.kind === 'suggest') {
+    if (messages.suggest) {
+      console.error(yellowText(messages.suggest));
+    }
+    console.error(unknownMessage);
+    return undefined;
+  }
+  if (messages.auto && resolution.value !== toolName) {
+    console.log(dimText(messages.auto));
+  }
+  const entry = metadataEntries.find((item) => item.tool.name === resolution.value);
+  if (!entry) {
+    console.error(unknownMessage);
+    return undefined;
+  }
+  return [entry];
 }
 
 function suggestServerName(

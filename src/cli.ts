@@ -269,7 +269,7 @@ function buildCommandSections(colorize: boolean): string[] {
         {
           name: 'list',
           summary: 'List configured servers (add --schema for tool docs)',
-          usage: 'mcporter list [name] [--schema] [--json]',
+          usage: 'mcporter list [name] [--schema] [--tool <name>] [--tool-names] [--json]',
         },
         {
           name: 'call',
