@@ -12,8 +12,18 @@ export function printCallOutput<T>(wrapped: CallResult<T>, raw: T, format: Outpu
       return;
     }
     case 'json': {
-      const jsonValue = wrapped.json();
+      let jsonValue: unknown = null;
+      try {
+        jsonValue = wrapped.json();
+      } catch {
+        jsonValue = null;
+      }
       if (jsonValue !== null && attemptPrintJson(jsonValue)) {
+        return;
+      }
+      // If the CallResult helpers can't extract a JSON payload, fall back to printing the raw
+      // envelope as JSON before giving up and using util.inspect.
+      if (attemptPrintJson(raw)) {
         return;
       }
       printRaw(raw);
