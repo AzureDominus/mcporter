@@ -8,19 +8,25 @@ describe('config sources tracking', () => {
   let tempDir: string;
   let originalCwd: string;
   let restoreHomedir: (() => void) | undefined;
+  let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(async () => {
     originalCwd = process.cwd();
+    originalEnv = { ...process.env };
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcporter-config-sources-'));
     process.chdir(tempDir);
     const spy = vi.spyOn(os, 'homedir');
     spy.mockReturnValue(tempDir);
     restoreHomedir = () => spy.mockRestore();
+    process.env.HOME = tempDir;
+    process.env.USERPROFILE = tempDir;
+    process.env.XDG_CONFIG_HOME = path.join(tempDir, '.config');
   });
 
   afterEach(async () => {
     restoreHomedir?.();
     process.chdir(originalCwd);
+    process.env = { ...originalEnv };
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   });
 
