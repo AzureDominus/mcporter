@@ -19,13 +19,13 @@ These undocumented shortcuts are safe for MCP agents to call when they need a qu
 
 - Hidden synonym for `mcporter list <server>`; it prints the same schema-rich output without teaching agents about the `list` verb.
 - Works with any selector the `list` command accepts (configured names, ad-hoc `https://` URLs, or `--stdio/--http-url` flags).
-- Pair with `--schema` or `--all-parameters` when an agent needs the full JSON Schema for every tool.
+- Prefer `--names-only` when you just need the tool menu. Use `--tool <name> --schema` when you need a single tool schema, or `--json --schema` for full dumps that get piped into other commands.
 
 ### Recommended Usage
 
 1. Agents wanting prose guidance should run `pnpm mcp call chrome-devtools.help`.
 2. If the server lacks a `help` tool, the command emits a dim hint and then shows the `describe`/`list` output so the agent still learns about the server.
-3. For a guaranteed TypeScript-style summary, skip straight to `mcporter describe chrome-devtools --schema`.
+3. For a guaranteed TypeScript-style summary, skip straight to `mcporter describe chrome-devtools`.
 4. Need the tool menu immediately? Call `pnpm mcp call chrome-devtools.list_tools`—it’s a shortcut for `mcporter list chrome-devtools`.
 
 > Note: `chrome-devtools` currently ships without a `help` tool, so step 1 always triggers the fallback and prints the same schema-rich output you would see from `mcporter list`.
