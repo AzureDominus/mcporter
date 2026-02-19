@@ -15,9 +15,9 @@ Usage: In repo copies, the shared content lives inside `<shared>…</shared>` an
 - Review any referenced tmux panes, CI logs, or failing command transcripts so you understand the most recent context before writing code.
 
 ### Tooling & Command Wrappers
-- Use the command wrappers provided by the workspace (`./runner …`, `scripts/committer`, `pnpm mcp:*`, etc.). Skip them only for trivial read-only shell commands if that’s explicitly allowed.
+- Use the command wrappers provided by the workspace (`scripts/committer`, `pnpm mcp:*`, etc.). Skip them only for trivial read-only shell commands if that’s explicitly allowed.
 - Stick to the package manager and runtime mandated by the repo (pnpm-only, bun-only, swift-only, go-only, etc.). Never swap in alternatives without approval.
-- When editing shared guardrail scripts (runners, committer helpers, browser tools, etc.), mirror the same change back into the `agent-scripts` folder so the canonical copy stays current.
+- When editing shared guardrail scripts (committer helpers, browser tools, etc.), mirror the same change back into the `agent-scripts` folder so the canonical copy stays current.
 - Ask the user before adding dependencies, changing build tooling, or altering project-wide configuration.
 - When discussing dependencies, always provide a GitHub URL.
 - Keep the project’s `AGENTS.md` `<tools></tools>` block in sync with the full tool list from `TOOLS.md` so downstream repos get the latest tool descriptions.
@@ -70,10 +70,10 @@ Usage: In repo copies, the shared content lives inside `<shared>…</shared>` an
 - When encountering toolchain instability, capture the repro steps in the designated troubleshooting doc and note any required cache cleans (DerivedData, SwiftPM caches) you perform.
 
 ## TypeScript Projects
-- Use the package manager declared by the workspace (often `pnpm` or `bun`) and run every command through the same wrapper humans use; do not substitute `npm`/`yarn` or bypass the runner.
+- Use the package manager declared by the workspace (often `pnpm` or `bun`) and run commands the same way humans do; do not substitute `npm`/`yarn` without approval.
 - Start each session by running the repo’s doc-index script (commonly a `docs:list` helper), then keep required watchers (`lint:watch`, `test:watch`, dev servers) running inside tmux unless told otherwise.
 - Treat `lint`, `typecheck`, and `test` commands (e.g., `pnpm run check`, `bun run typecheck`) as mandatory gates before handing off work; surface any failures with their exact command output.
-- Maintain strict typing—avoid `any`, prefer utility helpers already provided by the repo, and keep shared guardrail scripts (runner, committer, browser helpers) consistent by syncing back to `agent-scripts` when they change.
+- Maintain strict typing—avoid `any`, prefer utility helpers already provided by the repo, and keep shared guardrail scripts (committer, browser helpers) consistent by syncing back to `agent-scripts` when they change.
 - When editing UI code, follow the established component patterns (Tailwind via helper utilities, TanStack Query for data flow, etc.) and keep files under the preferred size limit by extracting helpers proactively.
 
 Keep this master file up to date as you notice new rules that recur across repositories, and reflect those updates back into every workspace’s local guardrail documents.
@@ -85,12 +85,10 @@ Keep this master file up to date as you notice new rules that recur across repos
 
 Edit guidance: keep the actual tool list inside this `<tools></tools>` block so downstream AGENTS syncs can copy it verbatim.
 
-- `runner`: Bash shim that routes every command through Bun guardrails (timeouts, git policy, safe deletes).
 - `git` / `bin/git`: Git shim that forces git through the guardrails; use `./git --help` to inspect.
 - `scripts/committer`: Stages the files you list and creates the commit safely.
 - `scripts/docs-list.ts`: Walks `docs/`, enforces front-matter, prints summaries; run `tsx scripts/docs-list.ts`.
 - `bin/browser-tools`: Compiled Chrome helper for remote control/screenshot/eval—use the binary (`bin/browser-tools --help`). Source lives in `scripts/browser-tools.ts`; edit there before rebuilding.
-- `scripts/runner.ts`: Bun implementation backing `runner`; run `bun scripts/runner.ts --help`.
 - `bin/sleep`: Sleep shim that enforces the 30s ceiling; run `bin/sleep --help`.
 - `xcp`: Xcode project/workspace helper (list/set targets, add/move/delete/rename groups & files, get/set build settings, manage image/data/color assets); run `xcp --help`.
 - `xcodegen`: Generate Xcode projects from YAML specs; run `xcodegen --help`.
@@ -105,5 +103,5 @@ Edit guidance: keep the actual tool list inside this `<tools></tools>` block so 
 
 # Repo Notes
 
-- Live Deepwiki tests are opt-in; run with `MCP_LIVE_TESTS=1 ./runner pnpm exec vitest run tests/live/deepwiki-live.test.ts` when you need real endpoint coverage.
+- Live Deepwiki tests are opt-in; run with `MCP_LIVE_TESTS=1 pnpm exec vitest run tests/live/deepwiki-live.test.ts` when you need real endpoint coverage.
 - The skipped OAuth-promotion case in `tests/runtime-transport.test.ts` can be validated by temporarily unskipping it (Vitest does not support `--runInBand`). Remove any temporary helper files after running.
