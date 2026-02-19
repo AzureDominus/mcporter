@@ -1,6 +1,6 @@
 {
   "name": "mcporter",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "description": "TypeScript runtime and CLI for connecting to configured Model Context Protocol servers.",
   "packageManager": "pnpm@10.22.0",
   "pnpm": {
