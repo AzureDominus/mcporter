@@ -14,8 +14,8 @@ Usage: In repo copies, the shared content lives inside `<shared>…</shared>` an
 - Open the local agent instructions plus any `docs:list` summaries at the start of every session. Re-run those helpers whenever you suspect the docs may have changed.
 - Review any referenced tmux panes, CI logs, or failing command transcripts so you understand the most recent context before writing code.
 
-### Tooling & Command Wrappers
-- Use the command wrappers provided by the workspace (`pnpm mcp:*`, etc.). Skip them only for trivial read-only shell commands if that’s explicitly allowed.
+### Tooling & Commands
+- Use the workspace commands and scripts (`pnpm mcp:*`, etc.). Skip them only for trivial read-only shell commands if that’s explicitly allowed.
 - Stick to the package manager and runtime mandated by the repo (pnpm-only, bun-only, swift-only, go-only, etc.). Never swap in alternatives without approval.
 - When editing shared guardrail scripts (browser tools, etc.), mirror the same change back into the `agent-scripts` folder so the canonical copy stays current.
 - Ask the user before adding dependencies, changing build tooling, or altering project-wide configuration.
@@ -40,7 +40,7 @@ Usage: In repo copies, the shared content lives inside `<shared>…</shared>` an
 - Match the repo’s established style (commit conventions, formatting tools, component patterns, etc.) by studying existing code before introducing new patterns.
 
 ### Git, Commits & Releases
-- Invoke git through the provided wrappers, especially for status, diffs, and commits. Only commit or push when the user asks you to do so.
+- Use git carefully for status, diffs, and commits. Only commit or push when the user asks you to do so.
 - To resolve a rebase, `git add`/`git commit` is allowed.
 - Follow the documented release or deployment checklists instead of inventing new steps.
 - Do not delete or rename unfamiliar files without double-checking with the user or the repo instructions.
@@ -59,11 +59,11 @@ Usage: In repo copies, the shared content lives inside `<shared>…</shared>` an
 
 ### Stack-Specific Reminders
 - Start background builders or watchers using the automation provided by the repo (daemon scripts, tmux-based dev servers, etc.) instead of running binaries directly.
-- Use the official CLI wrappers for browser automation, screenshotting, or MCP interactions rather than crafting new ad-hoc scripts.
+- Use the official CLI tools for browser automation, screenshotting, or MCP interactions rather than crafting new ad-hoc scripts.
 - Respect each workspace’s testing cadence (e.g., always running the main `check` script after edits, never launching forbidden dev servers, keeping replies concise when requested).
 
 ## Swift Projects
-- Kick off the workspace’s build daemon or helper before running any Swift CLI or app; rely on the provided wrapper to rebuild targets automatically instead of launching stale binaries.
+- Kick off the workspace’s build daemon or helper before running any Swift CLI or app; rely on the provided automation to rebuild targets automatically instead of launching stale binaries.
 - Validate changes with `swift build` and the relevant filtered test suites, documenting any compiler crashes and rewriting problematic constructs immediately so the suite can keep running.
 - Keep concurrency annotations (`Sendable`, actors, structured tasks) accurate and prefer static imports over dynamic runtime lookups that break ahead-of-time compilation.
 - Avoid editing derived artifacts or generated bundles directly—adjust the sources and let the build pipeline regenerate outputs.
@@ -85,10 +85,8 @@ Keep this master file up to date as you notice new rules that recur across repos
 
 Edit guidance: keep the actual tool list inside this `<tools></tools>` block so downstream AGENTS syncs can copy it verbatim.
 
-- `git` / `bin/git`: Git shim that forces git through the guardrails; use `./git --help` to inspect.
 - `scripts/docs-list.ts`: Walks `docs/`, enforces front-matter, prints summaries; run `tsx scripts/docs-list.ts`.
 - `bin/browser-tools`: Compiled Chrome helper for remote control/screenshot/eval—use the binary (`bin/browser-tools --help`). Source lives in `scripts/browser-tools.ts`; edit there before rebuilding.
-- `bin/sleep`: Sleep shim that enforces the 30s ceiling; run `bin/sleep --help`.
 - `xcp`: Xcode project/workspace helper (list/set targets, add/move/delete/rename groups & files, get/set build settings, manage image/data/color assets); run `xcp --help`.
 - `xcodegen`: Generate Xcode projects from YAML specs; run `xcodegen --help`.
 - `lldb`: To debug native apps, run `lldb` inside tmux and attach to the running app to inspect state interactively.
