@@ -41,6 +41,54 @@ describe('CLI call execution behavior', () => {
     logSpy.mockRestore();
   });
 
+  it('keeps key=value IDs as strings when schema declares string fields', async () => {
+    const toolName = 'upload_attachment';
+    const { handleCall } = await cliModulePromise;
+    const { runtime, callTool } = createRuntimeStub(
+      {
+        QuickBooks: [
+          {
+            name: toolName,
+            description: 'Upload attachment',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                entity_id: { type: 'string' },
+                retries: { type: 'number' },
+              },
+              required: ['entity_id'],
+            },
+          },
+        ],
+      },
+      {
+        definitions: [
+          {
+            name: 'QuickBooks',
+            command: { kind: 'stdio', command: 'quickbooks', args: [], cwd: process.cwd() },
+            source: { kind: 'local', path: '<test>' },
+          },
+        ],
+      }
+    );
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await handleCall(runtime, ['QuickBooks', 'entity_id=160', 'retries=5']);
+
+    expect(callTool).toHaveBeenCalledWith(
+      'QuickBooks',
+      toolName,
+      expect.objectContaining({
+        args: {
+          entity_id: '160',
+          retries: 5,
+        },
+      })
+    );
+
+    logSpy.mockRestore();
+  });
+
   it('still requires an explicit tool when multiple are available', async () => {
     const { handleCall } = await cliModulePromise;
     const { runtime, callTool } = createRuntimeStub(

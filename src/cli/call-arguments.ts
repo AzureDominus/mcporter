@@ -12,6 +12,7 @@ export interface CallArgsParseResult {
   server?: string;
   tool?: string;
   args: Record<string, unknown>;
+  namedArgRawValues?: Record<string, string>;
   positionalArgs?: unknown[];
   tailLog: boolean;
   output: OutputFormat;
@@ -188,6 +189,7 @@ export function parseCallArguments(args: string[]): CallArgsParseResult {
       result.server = value as string;
       continue;
     }
+    (result.namedArgRawValues ??= {})[parsed.key] = parsed.rawValue;
     result.args[parsed.key] = value;
   }
   if (trailingPositional.length > 0) {
@@ -273,7 +275,7 @@ function extractHttpCallExpression(raw: string): ReturnType<typeof parseCallExpr
   };
 }
 
-function coerceValue(value: string): unknown {
+export function coerceValue(value: string): unknown {
   const trimmed = value.trim();
   if (trimmed === '') {
     return '';

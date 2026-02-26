@@ -1,6 +1,6 @@
 import { analyzeConnectionError, type ConnectionIssue } from '../error-classifier.js';
 import { wrapCallResult } from '../result-utils.js';
-import { type CallArgsParseResult, parseCallArguments } from './call-arguments.js';
+import { type CallArgsParseResult, coerceValue, parseCallArguments } from './call-arguments.js';
 import { prepareEphemeralServerTarget } from './ephemeral-target.js';
 import { looksLikeHttpUrl, normalizeHttpUrlCandidate } from './http-utils.js';
 import type { IdentifierResolution } from './identifier-helpers.js';
@@ -90,9 +90,16 @@ export async function handleCall(
 
   const timeoutMs = resolveCallTimeout(parsed.timeoutMs);
   const hydratedArgs = await hydratePositionalArguments(runtime, server, tool, parsed.args, parsed.positionalArgs);
+  const schemaAwareArgs = await coerceNamedArgumentsBySchema(
+    runtime,
+    server,
+    tool,
+    hydratedArgs,
+    parsed.namedArgRawValues
+  );
   let invocation: { result: unknown; resolvedTool: string };
   try {
-    invocation = await invokeWithAutoCorrection(runtime, server, tool, hydratedArgs, timeoutMs);
+    invocation = await invokeWithAutoCorrection(runtime, server, tool, schemaAwareArgs, timeoutMs);
   } catch (error) {
     const issue = maybeReportConnectionIssue(server, tool, error);
     if (parsed.output === 'json' || parsed.output === 'raw') {
@@ -270,6 +277,68 @@ async function hydratePositionalArguments(
     hydrated[target.property] = value;
   });
   return hydrated;
+}
+
+async function coerceNamedArgumentsBySchema(
+  runtime: Awaited<ReturnType<typeof import('../runtime.js')['createRuntime']>>,
+  server: string,
+  tool: string,
+  args: Record<string, unknown>,
+  rawNamedArgs: Record<string, string> | undefined
+): Promise<Record<string, unknown>> {
+  if (!rawNamedArgs || Object.keys(rawNamedArgs).length === 0) {
+    return args;
+  }
+
+  const tools = await loadToolMetadata(runtime, server, { includeSchema: true }).catch(() => undefined);
+  if (!tools) {
+    return args;
+  }
+
+  const toolInfo = tools.find((entry) => entry.tool.name === tool);
+  if (!toolInfo || toolInfo.options.length === 0) {
+    return args;
+  }
+
+  const options = new Map(toolInfo.options.map((option) => [option.property, option]));
+  let changed = false;
+  const nextArgs: Record<string, unknown> = { ...args };
+
+  for (const [key, rawValue] of Object.entries(rawNamedArgs)) {
+    const option = options.get(key);
+    if (!option) {
+      continue;
+    }
+
+    const coerced = coerceNamedValueByType(rawValue, option.type);
+    if (!Object.is(nextArgs[key], coerced)) {
+      nextArgs[key] = coerced;
+      changed = true;
+    }
+  }
+
+  return changed ? nextArgs : args;
+}
+
+function coerceNamedValueByType(rawValue: string, type: 'string' | 'number' | 'boolean' | 'array' | 'unknown'): unknown {
+  switch (type) {
+    case 'string':
+      return rawValue;
+    case 'number': {
+      const coerced = coerceValue(rawValue);
+      return typeof coerced === 'number' ? coerced : rawValue;
+    }
+    case 'boolean': {
+      const coerced = coerceValue(rawValue);
+      return typeof coerced === 'boolean' ? coerced : rawValue;
+    }
+    case 'array': {
+      const coerced = coerceValue(rawValue);
+      return Array.isArray(coerced) ? coerced : rawValue;
+    }
+    default:
+      return coerceValue(rawValue);
+  }
 }
 
 type ToolResolution = IdentifierResolution;
